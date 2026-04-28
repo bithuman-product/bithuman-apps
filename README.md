@@ -10,7 +10,7 @@ All three apps consume the SDK as a normal Swift Package Manager
 dependency:
 
 ```swift
-.package(url: "https://github.com/bithuman-product/bithuman-kit.git", from: "0.7.0")
+.package(url: "https://github.com/bithuman-product/bithuman-kit.git", from: "0.7.1")
 ```
 
 Stack: ASR (SpeechAnalyzer) -> LLM (Gemma 3 / 3n via MLX) -> TTS

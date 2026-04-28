@@ -27,7 +27,7 @@ let package = Package(
         // matching this version must exist on the bithuman-kit repo.
         .package(
             url: "https://github.com/bithuman-product/bithuman-kit.git",
-            from: "0.7.0"
+            from: "0.7.1"
         ),
         // Sparkle: auto-update for the .app distribution. 2.7+ has the
         // modern XPC-based privileged updater needed for sandbox-safe
