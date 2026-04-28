@@ -30,7 +30,7 @@ iPhone).
 
 ## Mac
 
-![](docs/img/mac-hero.png)
+![](docs/img/mac-hero.webp)
 
 A SwiftUI App-lifecycle binary that wraps the SDK's
 `AvatarCoordinator` + `AvatarWindow` graph. Launches into video mode
@@ -48,7 +48,7 @@ Walkthrough: [Mac/README.md](Mac/README.md)
 
 ## iPad
 
-![](docs/img/ipad-hero.png)
+![](docs/img/ipad-hero.webp)
 
 iPadOS app with a 320 pt Stage Manager floating widget, a draggable
 Picture-in-Picture float, and PhotosPicker face swap. Wrapped by an
@@ -66,7 +66,7 @@ Walkthrough: [iPad/README.md](iPad/README.md)
 
 ## iPhone
 
-![](docs/img/iphone-hero.png)
+![](docs/img/iphone-hero.webp)
 
 Phone-form-factor variant — portrait-locked, single-orientation frame
 pump, smaller LLM (Gemma 3 1B QAT 4-bit, ~800 MB) so it fits the iOS
