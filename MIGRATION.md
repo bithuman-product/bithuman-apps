@@ -12,7 +12,7 @@ public `bithuman-apps` repo.
 
 1. **`bithuman-kit` v0.1.0 must be tagged and public.** The Mac
    `Package.swift` and the iPad/iPhone `App/project.yml` files all
-   declare `from: "0.1.0"` against
+   declare `from: "0.7.0"` against
    `https://github.com/bithuman-product/bithuman-kit.git`. If that tag
    doesn't exist, every fresh clone breaks at `swift package resolve`.
    Verify:
