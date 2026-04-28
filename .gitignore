@@ -1,0 +1,14 @@
+.DS_Store
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+# xcodegen-generated artifacts — regenerate via project.yml
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+iPad/App/Generated/
+iPhone/App/Generated/
+iPad/App/build/
+iPhone/App/build/
+# Build outputs
+dist/
