@@ -18,6 +18,27 @@ Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / 
 | iPad    | [`iPad/`](iPad/)     | Stage-Manager widget + PiP    | [iPad/README.md](iPad/README.md)     |
 | iPhone  | [`iPhone/`](iPhone/) | Portrait, smaller LLM         | [iPhone/README.md](iPhone/README.md) |
 
+### Essence vs Expression — one factory, both runtimes
+
+The SDK now ships two on-device avatar runtimes. **Expression** is the original audio→TTS→DiT actor with a circular floating window; **Essence** is a lighter-weight rectangular full-frame runtime whose lip-sync is pre-baked at `.imx` pack time and which surfaces frames as an `AsyncStream<CGImage?>`. Both Mac and iPad reference apps auto-detect which kind of `.imx` was loaded via the unified factory and dispatch internally — same UX regardless of which runtime drives the avatar:
+
+```swift
+let runtime: BithumanRuntime = try Bithuman.createRuntime(modelPath: weightsURL)
+switch runtime {
+case .expression(let bithuman):
+    // existing wiring: VoiceChat → AvatarCoordinator → FramePump →
+    // circular AvatarWindow / AvatarRendererView (clipMode = .circle)
+case .essence(let essenceRuntime):
+    // new wiring: rectangular AvatarWindow(targetSize:clipMode:.fill);
+    // mic → essenceRuntime.pushAudio(_:) ; essenceRuntime.frames()
+    // AsyncStream → renderer.show(_:)
+}
+```
+
+The Essence branch is gated behind a `BITHUMAN_KIT_ESSENCE` Swift compile flag in each app's package — off by default until the next bithuman-kit-public release ships the runtime. Existing Expression behaviour is unchanged when the flag is off.
+
+iPhone is intentionally not in scope for the Essence demo this phase: the 8 GB iPhone 16 Pro memory budget is too tight to host Essence alongside the Expression-class assets safely. iPhone Essence is Phase 2 work.
+
 ---
 
 ## Mac

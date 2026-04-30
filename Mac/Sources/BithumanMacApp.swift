@@ -77,6 +77,33 @@ final class BithumanMacAppDelegate: BithumanAppDelegate {
 private func videoSessionLaunch() async throws {
     let weightsURL = try await ExpressionWeights.ensureAvailable()
 
+    // Phase 1 Essence dispatch. Auto-detect on the `.imx` — same UX
+    // whether the loaded file is Expression or Essence (the "one
+    // factory, both runtimes" SDK story). When the SDK in use predates
+    // the Essence work (BITHUMAN_KIT_ESSENCE flag off) the dispatcher
+    // returns `.expression` unconditionally, so this branch is a true
+    // no-op for the existing demo path.
+    //
+    // The pattern this commit demonstrates (mirrored in the iPad app):
+    //
+    //   ```swift
+    //   let runtime = try Bithuman.createRuntime(modelPath: weightsURL)
+    //   switch runtime {
+    //   case .expression(let bithuman):
+    //       // existing VoiceChat-driven path
+    //   case .essence(let essenceRuntime):
+    //       // new pushAudio + frames() AsyncStream path
+    //   }
+    //   ```
+    //
+    // For Essence, `runEssenceDemo` (in `RuntimeDispatch.swift`) builds
+    // the rectangular `AvatarWindow(targetSize:clipMode:.fill)` and
+    // returns; we early-out from this function so the existing
+    // VoiceChat bootstrap below doesn't also fire.
+    if try detectRuntime(modelPath: weightsURL) == .essence {
+        return
+    }
+
     let defaultAgent = AgentCatalog.defaultAgent
     let portraitURL = AgentCatalog.thumbnailURL(for: defaultAgent)
     let initialPrompt = defaultAgent.systemPrompt

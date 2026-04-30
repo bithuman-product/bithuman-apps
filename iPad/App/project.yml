@@ -20,9 +20,21 @@ options:
 # app pull `bitHumanKit` from the public bithuman-kit repo at the
 # tagged release below. Bump `from:` whenever a new SDK release ships.
 packages:
-  bithuman-kit:
-    url: https://github.com/bithuman-product/bithuman-kit.git
-    from: 0.1.0
+  bithuman-kit-public:
+    url: https://github.com/bithuman-product/bithuman-kit-public.git
+    # 0.8.1 is the latest published binary release; carries the
+    # heartbeat-metering + bundled CLI key work from bithuman-kit 0.8.1.
+    # Essence (rectangular full-frame on-device runtime) lands in
+    # 0.10.0 — until that ships, the Essence branch in
+    # `BithumanPadApp.start` stays gated behind the
+    # `BITHUMAN_KIT_ESSENCE` Swift compile flag. See
+    # `iPadRuntimeDispatch.swift` for the planned `Bithuman.createRuntime`
+    # dispatch.
+    # TODO: bump to 0.10.0 (or whatever picks up `Bithuman.createRuntime`
+    # + `EssenceRuntime`) and add `BITHUMAN_KIT_ESSENCE` to the target's
+    # OTHER_SWIFT_FLAGS (settings.base.OTHER_SWIFT_FLAGS) when the next
+    # bithuman-kit-public release ships.
+    from: 0.8.1
 
 targets:
   BithumanPad:
@@ -38,7 +50,7 @@ targets:
       - path: Assets.xcassets
         type: folder
     dependencies:
-      - package: bithuman-kit
+      - package: bithuman-kit-public
         product: bitHumanKit
     info:
       path: Generated/Info.plist

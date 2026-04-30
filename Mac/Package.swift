@@ -7,12 +7,11 @@ import PackageDescription
 //
 // External developers: clone the bithuman-apps repo, then run
 // `swift build -c release --product BithumanMac` from this Mac/
-// directory. SPM pulls bitHumanKit from the public repo below.
-//
-// The bithuman-kit package itself is the SDK source of truth at
-// https://github.com/bithuman-product/bithuman-kit — this manifest only
-// declares the dependency; the SDK package's own manifest pulls in
-// MLX, swift-transformers, mlx-audio-swift, etc.
+// directory. SPM pulls bitHumanKit from the public binary distribution
+// at https://github.com/bithuman-product/bithuman-kit-public — a single
+// `bitHumanKit` binaryTarget with every transitive dep statically
+// linked, so this manifest needs no other dependencies for the engine
+// itself. Sparkle stays as a build-time dep for the auto-updater.
 
 let package = Package(
     name: "BithumanMac",
@@ -23,11 +22,31 @@ let package = Package(
         .executable(name: "BithumanMac", targets: ["BithumanMac"]),
     ],
     dependencies: [
-        // The SDK. Bump `from:` to pick up newer SDK releases. A tag
-        // matching this version must exist on the bithuman-kit repo.
+        // The SDK — public binary distribution. `bithuman-kit-public`
+        // wraps the pre-compiled `bitHumanKit.xcframework` as a
+        // SwiftPM binaryTarget; every transitive Swift Package
+        // dependency (MLX, swift-transformers, …) is statically linked
+        // into the framework binary, so this is the only SDK package
+        // needed.
+        //
+        // 0.8.1 is the latest published binary release; it carries
+        // the heartbeat-metering + bundled CLI key + extended agentic
+        // docs work from bithuman-kit 0.8.1. Essence (the rectangular
+        // full-frame on-device runtime) lands in 0.10.0 — until that
+        // ships, the Essence branch in `BithumanMacApp.videoSessionLaunch`
+        // stays gated behind the `BITHUMAN_KIT_ESSENCE` Swift compile
+        // flag and the demo falls through to the existing Expression
+        // path. See `RuntimeDispatch.swift` for the planned
+        // `Bithuman.createRuntime` dispatch — it's the additive new
+        // branch, not a replacement of the existing Expression
+        // behaviour.
+        // TODO: bump `from:` to 0.10.0 (or whatever the next
+        // bithuman-kit-public release happens to be) and uncomment
+        // the `.define("BITHUMAN_KIT_ESSENCE")` swift setting below
+        // when that release ships.
         .package(
-            url: "https://github.com/bithuman-product/bithuman-kit.git",
-            from: "0.7.1"
+            url: "https://github.com/bithuman-product/bithuman-kit-public.git",
+            from: "0.8.1"
         ),
         // Sparkle: auto-update for the .app distribution. 2.7+ has the
         // modern XPC-based privileged updater needed for sandbox-safe
@@ -41,7 +60,7 @@ let package = Package(
         .executableTarget(
             name: "BithumanMac",
             dependencies: [
-                .product(name: "bitHumanKit", package: "bithuman-kit"),
+                .product(name: "bitHumanKit", package: "bithuman-kit-public"),
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources",
@@ -49,7 +68,18 @@ let package = Package(
             // et al.) aren't Sendable yet, and Apple's audio frameworks
             // predate strict concurrency. Match the SDK's setting so
             // call sites compile without isolation noise.
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            //
+            // BITHUMAN_KIT_ESSENCE — enable the Essence runtime branch in
+            // `RuntimeDispatch.swift`. Off by default because the public
+            // 0.8.1 / 0.9.0 SDK does not yet export
+            // `Bithuman.createRuntime` or `EssenceRuntime`. Re-enable
+            // (and bump the dep `from:` above to 0.10.0+) when the next
+            // bithuman-kit-public release ships. Until then the demo
+            // takes the existing Expression-only path unchanged.
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+                // .define("BITHUMAN_KIT_ESSENCE"),  // ← uncomment with 0.10.0+
+            ]
         ),
     ]
 )
