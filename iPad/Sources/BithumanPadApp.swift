@@ -211,6 +211,10 @@ final class BithumanPadLifecycle: ObservableObject {
     private var framePump: FramePump?
     private var pipActiveSubscription: AnyCancellable?
     private var warmingTimer: Timer?
+    /// Held while an Essence demo session is alive — keeps the
+    /// frame-drain task rooted past `start()`'s return. Cleared on
+    /// `start()` retry / lifecycle teardown.
+    private var essenceFrameTask: Task<Void, Never>?
 
     func start() async {
         guard chat == nil else { return }
@@ -238,6 +242,32 @@ final class BithumanPadLifecycle: ObservableObject {
                     }
                 }
             }
+
+            // Phase 1 Essence dispatch — auto-detect on the `.imx`.
+            // Same UX whether the loaded file is Expression or
+            // Essence (the "one factory, both runtimes" SDK story).
+            // When the SDK in use predates the Essence work
+            // (BITHUMAN_KIT_ESSENCE flag off) this is a no-op:
+            // returns `.expression`, falls through to the existing
+            // VoiceChat bootstrap below.
+            //
+            // The pattern (mirrored in the Mac app):
+            //
+            //   ```swift
+            //   let runtime = try Bithuman.createRuntime(modelPath: weightsURL)
+            //   switch runtime {
+            //   case .expression(let bithuman):
+            //       // existing VoiceChat-driven path
+            //   case .essence(let essenceRuntime):
+            //       // new pushAudio + frames() AsyncStream path
+            //   }
+            //   ```
+            if try iPadDetectRuntime(modelPath: weightsURL, lifecycle: self) == .essence {
+                self.shouldKeepScreenAwake = true
+                stopWarmingProgress(complete: true)
+                return
+            }
+
             let defaultAgent = AgentCatalog.defaultAgent
             let portraitURL = AgentCatalog.thumbnailURL(for: defaultAgent)
 
@@ -316,6 +346,30 @@ final class BithumanPadLifecycle: ObservableObject {
             self.bootError = "\(error.localizedDescription)"
             stopWarmingProgress(complete: false)
         }
+    }
+
+    // MARK: - Essence demo bindings
+
+    /// Wire an Essence-configured `AvatarRendererView` into the
+    /// lifecycle so the existing iPad SwiftUI tree (`AvatarPanelView`)
+    /// can render frames from `EssenceRuntime.frames()` exactly the
+    /// same way it renders Expression frames. The only visible
+    /// difference is the renderer's `clipMode` — `.fill` for the
+    /// rectangular Essence frame instead of `.circle`.
+    ///
+    /// Called from `runEssenceDemo` in `iPadRuntimeDispatch.swift`.
+    @MainActor
+    func bindEssenceRenderer(_ renderer: AvatarRendererView) {
+        self.rendererView = renderer
+    }
+
+    /// Root the Essence frame-drain Task on the lifecycle so it
+    /// survives the dispatch function's return. Cancels and replaces
+    /// any prior task — Essence is single-consumer per actor.
+    @MainActor
+    func bindEssenceFrameTask(_ task: Task<Void, Never>) {
+        essenceFrameTask?.cancel()
+        essenceFrameTask = task
     }
 
     /// Drive `warmingProgress` along an asymptotic curve so the
