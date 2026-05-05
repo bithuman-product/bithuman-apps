@@ -20,8 +20,8 @@ options:
 # app pull `bitHumanKit` from the public bithuman-kit repo at the
 # tagged release below. Bump `from:` whenever a new SDK release ships.
 packages:
-  bithuman-kit-public:
-    url: https://github.com/bithuman-product/bithuman-kit-public.git
+  bithuman-sdk-public:
+    url: https://github.com/bithuman-product/bithuman-sdk-public.git
     # 0.8.1 is the latest published binary release; carries the
     # heartbeat-metering + bundled CLI key work from bithuman-kit 0.8.1.
     # Essence (rectangular full-frame on-device runtime) lands in
@@ -33,7 +33,7 @@ packages:
     # TODO: bump to 0.10.0 (or whatever picks up `Bithuman.createRuntime`
     # + `EssenceRuntime`) and add `BITHUMAN_KIT_ESSENCE` to the target's
     # OTHER_SWIFT_FLAGS (settings.base.OTHER_SWIFT_FLAGS) when the next
-    # bithuman-kit-public release ships.
+    # bithuman-sdk-public release ships.
     from: 0.8.1
 
 targets:
@@ -50,7 +50,7 @@ targets:
       - path: Assets.xcassets
         type: folder
     dependencies:
-      - package: bithuman-kit-public
+      - package: bithuman-sdk-public
         product: bitHumanKit
     info:
       path: Generated/Info.plist

@@ -8,7 +8,7 @@ import PackageDescription
 // External developers: clone the bithuman-apps repo, then run
 // `swift build -c release --product BithumanMac` from this Mac/
 // directory. SPM pulls bitHumanKit from the public binary distribution
-// at https://github.com/bithuman-product/bithuman-kit-public — a single
+// at https://github.com/bithuman-product/bithuman-sdk-public — a single
 // `bitHumanKit` binaryTarget with every transitive dep statically
 // linked, so this manifest needs no other dependencies for the engine
 // itself. Sparkle stays as a build-time dep for the auto-updater.
@@ -22,7 +22,7 @@ let package = Package(
         .executable(name: "BithumanMac", targets: ["BithumanMac"]),
     ],
     dependencies: [
-        // The SDK — public binary distribution. `bithuman-kit-public`
+        // The SDK — public binary distribution. `bithuman-sdk-public`
         // wraps the pre-compiled `bitHumanKit.xcframework` as a
         // SwiftPM binaryTarget; every transitive Swift Package
         // dependency (MLX, swift-transformers, …) is statically linked
@@ -41,11 +41,11 @@ let package = Package(
         // branch, not a replacement of the existing Expression
         // behaviour.
         // TODO: bump `from:` to 0.10.0 (or whatever the next
-        // bithuman-kit-public release happens to be) and uncomment
+        // bithuman-sdk-public release happens to be) and uncomment
         // the `.define("BITHUMAN_KIT_ESSENCE")` swift setting below
         // when that release ships.
         .package(
-            url: "https://github.com/bithuman-product/bithuman-kit-public.git",
+            url: "https://github.com/bithuman-product/bithuman-sdk-public.git",
             from: "0.8.1"
         ),
         // Sparkle: auto-update for the .app distribution. 2.7+ has the
@@ -60,7 +60,7 @@ let package = Package(
         .executableTarget(
             name: "BithumanMac",
             dependencies: [
-                .product(name: "bitHumanKit", package: "bithuman-kit-public"),
+                .product(name: "bitHumanKit", package: "bithuman-sdk-public"),
                 .product(name: "Sparkle", package: "Sparkle"),
             ],
             path: "Sources",
@@ -74,7 +74,7 @@ let package = Package(
             // 0.8.1 / 0.9.0 SDK does not yet export
             // `Bithuman.createRuntime` or `EssenceRuntime`. Re-enable
             // (and bump the dep `from:` above to 0.10.0+) when the next
-            // bithuman-kit-public release ships. Until then the demo
+            // bithuman-sdk-public release ships. Until then the demo
             // takes the existing Expression-only path unchanged.
             swiftSettings: [
                 .swiftLanguageMode(.v5),

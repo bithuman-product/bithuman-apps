@@ -5,7 +5,7 @@ Reference apps showing how to embed [`bitHumanKit`](https://docs.bithuman.ai/swi
 All three apps consume the SDK as a normal Swift Package Manager dependency from the public binary distribution:
 
 ```swift
-.package(url: "https://github.com/bithuman-product/bithuman-kit-public.git", from: "0.8.1")
+.package(url: "https://github.com/bithuman-product/bithuman-sdk-public.git", from: "0.8.1")
 ```
 
 Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / Kokoro) → bitHuman avatar engine (Wav2Vec2 → DiT → VAE → ANE). Full architecture, hardware floor, pricing, and integration docs live at **[docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview)**.
@@ -35,7 +35,7 @@ case .essence(let essenceRuntime):
 }
 ```
 
-The Essence branch is gated behind a `BITHUMAN_KIT_ESSENCE` Swift compile flag in each app's package — off by default until the next bithuman-kit-public release ships the runtime. Existing Expression behaviour is unchanged when the flag is off.
+The Essence branch is gated behind a `BITHUMAN_KIT_ESSENCE` Swift compile flag in each app's package — off by default until the next bithuman-sdk-public release ships the runtime. Existing Expression behaviour is unchanged when the flag is off.
 
 iPhone is intentionally not in scope for the Essence demo this phase: the 8 GB iPhone 16 Pro memory budget is too tight to host Essence alongside the Expression-class assets safely. iPhone Essence is Phase 2 work.
 

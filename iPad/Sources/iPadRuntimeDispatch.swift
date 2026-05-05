@@ -21,7 +21,7 @@
 // **Compile gate.** `BITHUMAN_KIT_ESSENCE` is set in the iPad build's
 // `OTHER_SWIFT_FLAGS` only when the SDK exposes `Bithuman.createRuntime`
 // + `EssenceRuntime` (bithuman-kit ≥ the commit landing the Essence
-// work — slated for the 0.10.0 bithuman-kit-public release). Until that
+// work — slated for the 0.10.0 bithuman-sdk-public release). Until that
 // release ships, the gate is off and the demo falls through to the
 // existing Expression-only path.
 

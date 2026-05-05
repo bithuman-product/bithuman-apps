@@ -22,7 +22,7 @@
 // target's `swiftSettings` only when the SDK dependency exposes
 // `Bithuman.createRuntime` + `EssenceRuntime` (i.e. bithuman-kit ≥ the
 // commit that lands the Essence work — slated for the 0.10.0
-// bithuman-kit-public release). Until that release ships, the gate is
+// bithuman-sdk-public release). Until that release ships, the gate is
 // off and the demo falls through to the existing Expression-only path
 // — guaranteeing the reference Mac app keeps building against the
 // current public binary distribution.
@@ -83,7 +83,7 @@ func detectRuntime(modelPath: URL) throws -> RuntimeDispatch {
     // unchanged. Drop a one-line breadcrumb so a developer running
     // the demo against an Essence `.imx` here sees a clear hint.
     _ = modelPath
-    NSLog("[BithumanMac] BITHUMAN_KIT_ESSENCE compile flag is off; assuming Expression `.imx`. Bump bithuman-kit-public to ≥ 0.10.0 + enable the flag to demo Essence.")
+    NSLog("[BithumanMac] BITHUMAN_KIT_ESSENCE compile flag is off; assuming Expression `.imx`. Bump bithuman-sdk-public to ≥ 0.10.0 + enable the flag to demo Essence.")
     return .expression
     #endif
 }
