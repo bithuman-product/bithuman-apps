@@ -24,7 +24,7 @@ iPhone/
 ├── README.md
 ├── App/
 │   ├── project.yml                  xcodegen spec — SPM dep on
-│   │                                github.com/bithuman-product/bithuman-kit
+│   │                                github.com/bithuman-product/bithuman-sdk-public
 │   ├── Assets.xcassets/             app icon
 │   ├── BithumanPhone.entitlements   increased-memory + extended-vaddr
 │   └── ExportOptions.plist          App Store distribution config
