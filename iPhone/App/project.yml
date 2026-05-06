@@ -21,12 +21,18 @@ options:
   groupSortPosition: top
 
 # Remote SPM dependency. External developers consuming this reference
-# app pull `bitHumanKit` from the public bithuman-kit repo at the
-# tagged release below. Bump `from:` whenever a new SDK release ships.
+# app pull `bitHumanKit` from the public bithuman-sdk-public repo at
+# the tagged release below. Bump `from:` whenever a new SDK release
+# ships. (The Mac and iPad siblings consume the same package — the
+# 2026-05 consolidation renamed `bithuman-kit-public` →
+# `bithuman-sdk-public` and folded the private `bithuman-kit` source
+# into `bithuman-sdk/swift/`.)
 packages:
-  bithuman-kit:
-    url: https://github.com/bithuman-product/bithuman-kit.git
-    from: 0.1.0
+  bithuman-sdk-public:
+    url: https://github.com/bithuman-product/bithuman-sdk-public.git
+    # Match the iPad sibling — 0.8.1 is the latest published binary
+    # release (heartbeat metering + bundled CLI key from kit 0.8.1).
+    from: 0.8.1
 
 targets:
   BithumanPhone:
@@ -43,7 +49,7 @@ targets:
       - path: Assets.xcassets
         type: folder
     dependencies:
-      - package: bithuman-kit
+      - package: bithuman-sdk-public
         product: bitHumanKit
     info:
       path: Generated/Info.plist
