@@ -17,6 +17,7 @@ Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / 
 | Mac     | [`Mac/`](Mac/)       | Sparkle-updateable .app + DMG | [Mac/README.md](Mac/README.md)       |
 | iPad    | [`iPad/`](iPad/)     | Stage-Manager widget + PiP    | [iPad/README.md](iPad/README.md)     |
 | iPhone  | [`iPhone/`](iPhone/) | Portrait, smaller LLM         | [iPhone/README.md](iPhone/README.md) |
+| Demos   | [`demos/`](demos/)   | Showcase apps (kiosk, tutor, NPC, ...) | [demos/README.md](demos/README.md)   |
 
 ### Essence vs Expression — one factory, both runtimes
 
@@ -81,6 +82,24 @@ open BithumanPhone.xcodeproj  # then Cmd-R on iPhone 16 Pro+
 ```
 
 Walkthrough: [iPhone/README.md](iPhone/README.md).
+
+---
+
+## Architecture
+
+Every app in this repo -- reference apps and demos alike -- consumes the bitHuman SDK as an **external, pre-built dependency** via the published binary package (SwiftPM for Apple platforms, pip for Python). No SDK source is vendored. This is intentional: it ensures the apps test the real developer experience, surface packaging or API gaps early, and stay decoupled from engine internals.
+
+```
+┌─────────────┐       SwiftPM / pip        ┌──────────────────────┐
+│  App code   │  ──────────────────────►   │  bitHumanKit / bithuman  │
+│  (this repo)│      published binary      │  (SDK, external)     │
+└─────────────┘                            └──────────────────────┘
+```
+
+### Adding new apps or demos
+
+- **Reference app** (new platform variant): add a top-level directory (e.g. `visionOS/`), wire the SwiftPM dependency, and add a row to the "What's here" table above.
+- **Demo** (use-case showcase): add a subdirectory under `demos/`. See [demos/README.md](demos/README.md) for the checklist.
 
 ---
 
