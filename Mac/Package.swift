@@ -44,6 +44,11 @@ let package = Package(
         // bithuman-sdk-public release happens to be) and uncomment
         // the `.define("BITHUMAN_KIT_ESSENCE")` swift setting below
         // when that release ships.
+        //
+        // Single source of truth: `../version.yml`. When you bump the
+        // version below, also update `../iPad/App/project.yml` and
+        // `../iPhone/App/project.yml` and `../version.yml` together
+        // — CI's `sdk-version-consistency` workflow fails otherwise.
         .package(
             url: "https://github.com/bithuman-product/bithuman-sdk-public.git",
             from: "0.8.1"

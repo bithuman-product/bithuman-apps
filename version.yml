@@ -1,0 +1,20 @@
+# Single source of truth for the bitHuman SDK version this repo's
+# reference apps depend on. Bump this whenever a new bithuman-sdk-public
+# release is published, then update the same version string in:
+#
+#   - Mac/Package.swift          (`from: "X.Y.Z"`)
+#   - iPad/App/project.yml       (`from: X.Y.Z`)
+#   - iPhone/App/project.yml     (`from: X.Y.Z`)
+#
+# The CI workflow `.github/workflows/sdk-version-consistency.yml` reads
+# this file and fails the PR if any of those three files disagree with
+# the version below — so accidentally bumping two of three is caught at
+# review time rather than at the next external developer's clone.
+#
+# (SwiftPM's `Package.swift` and xcodegen's `project.yml` don't share an
+# include mechanism, so we can't auto-propagate from this file. The
+# guardrail is a check, not an apply.)
+
+bithuman-sdk-public:
+  version: "0.8.1"
+  release: https://github.com/bithuman-product/bithuman-sdk-public/releases/tag/v0.8.1

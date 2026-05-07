@@ -22,16 +22,18 @@ options:
 
 # Remote SPM dependency. External developers consuming this reference
 # app pull `bitHumanKit` from the public bithuman-sdk-public repo at
-# the tagged release below. Bump `from:` whenever a new SDK release
-# ships. (The Mac and iPad siblings consume the same package — the
-# 2026-05 consolidation renamed `bithuman-kit-public` →
-# `bithuman-sdk-public` and folded the private `bithuman-kit` source
-# into `bithuman-sdk/swift/`.)
+# the tagged release below. The Mac and iPad siblings consume the same
+# package.
+#
+# Single source of truth: `../../version.yml`. When you bump the
+# version, also update `../../Mac/Package.swift` and
+# `../../iPad/App/project.yml` and `../../version.yml` together —
+# CI's `sdk-version-consistency` workflow fails otherwise.
 packages:
   bithuman-sdk-public:
     url: https://github.com/bithuman-product/bithuman-sdk-public.git
-    # Match the iPad sibling — 0.8.1 is the latest published binary
-    # release (heartbeat metering + bundled CLI key from kit 0.8.1).
+    # 0.8.1 is the latest published binary release (heartbeat metering
+    # + bundled CLI key from kit 0.8.1).
     from: 0.8.1
 
 targets:

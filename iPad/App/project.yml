@@ -12,13 +12,21 @@ options:
   deploymentTarget:
     iOS: "26.0"
   bundleIdPrefix: ai.bithuman
-  xcodeVersion: "16.0"
+  # Xcode 26+ — needed for the iOS 26 SDK that the deploymentTarget
+  # above demands. Match the iPhone sibling at App/project.yml so
+  # xcodegen produces equivalent project metadata across the two apps.
+  xcodeVersion: "26.0"
   groupSortPosition: top
   createIntermediateGroups: true
 
 # Remote SPM dependency. External developers consuming this reference
-# app pull `bitHumanKit` from the public bithuman-kit repo at the
-# tagged release below. Bump `from:` whenever a new SDK release ships.
+# app pull `bitHumanKit` from the public bithuman-sdk-public repo at the
+# tagged release below.
+#
+# Single source of truth: `../../version.yml`. When you bump the
+# version, also update `../../Mac/Package.swift` and
+# `../../iPhone/App/project.yml` and `../../version.yml` together —
+# CI's `sdk-version-consistency` workflow fails otherwise.
 packages:
   bithuman-sdk-public:
     url: https://github.com/bithuman-product/bithuman-sdk-public.git
