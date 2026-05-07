@@ -1,6 +1,13 @@
 # Migration — staging this directory into github.com/bithuman-product/bithuman-apps
 
-Maintainer doc. Not for external developers.
+Maintainer doc. Not for external developers. **Status: completed.** This
+file is kept as a record of the initial public-staging procedure. The
+repo went public on the first commit; current SDK pin is `from: "0.8.1"`
+against `https://github.com/bithuman-product/bithuman-sdk-public.git`
+(the public binary distribution — `bithuman-kit` was renamed to
+`bithuman-sdk-public` during the 2026-05-05 consolidation). Version pins
+are tracked at `version.yml` with a CI guardrail at
+`scripts/check-sdk-version.sh`.
 
 This directory was generated from `swift-voice-chat/Apps/Bithuman{Mac,Pad,Phone}/`
 as a snapshot. The dev repo (`swift-voice-chat`) keeps its
@@ -10,14 +17,16 @@ public `bithuman-apps` repo.
 
 ## Pre-flight — what must be true before the first public commit
 
-1. **`bithuman-kit` v0.1.0 must be tagged and public.** The Mac
-   `Package.swift` and the iPad/iPhone `App/project.yml` files all
-   declare `from: "0.7.1"` against
-   `https://github.com/bithuman-product/bithuman-kit.git`. If that tag
-   doesn't exist, every fresh clone breaks at `swift package resolve`.
+1. **`bithuman-sdk-public` (the SwiftPM binary distribution) must be
+   tagged and have a corresponding xcframework upload on its Releases
+   page.** The Mac `Package.swift` and the iPad/iPhone `App/project.yml`
+   files all declare `from: "0.8.1"` against
+   `https://github.com/bithuman-product/bithuman-sdk-public.git`. If
+   that tag doesn't exist, every fresh clone breaks at
+   `swift package resolve`.
    Verify:
    ```sh
-   git ls-remote https://github.com/bithuman-product/bithuman-kit.git refs/tags/0.1.0
+   git ls-remote https://github.com/bithuman-product/bithuman-sdk-public.git refs/tags/0.8.1
    ```
    should print a non-empty SHA.
 
@@ -201,7 +210,7 @@ p = "$f"
 s = open(p).read()
 s = re.sub(
     r"packages:\s*\n  bithuman-kit:\s*\n    path: \.\.\/\.\.\/\.\.",
-    "packages:\n  bithuman-kit:\n    url: https://github.com/bithuman-product/bithuman-kit.git\n    from: 0.1.0",
+    "packages:\n  bithuman-sdk-public:\n    url: https://github.com/bithuman-product/bithuman-sdk-public.git\n    from: 0.8.1",
     s,
 )
 open(p, "w").write(s)

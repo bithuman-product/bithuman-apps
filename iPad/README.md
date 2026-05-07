@@ -25,7 +25,7 @@ iPad/
 ├── README.md
 ├── App/
 │   ├── project.yml                 xcodegen spec — declares the SPM
-│   │                               dep on github.com/bithuman-product/bithuman-kit
+│   │                               dep on github.com/bithuman-product/bithuman-sdk-public
 │   ├── Assets.xcassets/            app icon + accent colour
 │   ├── BithumanPad.entitlements    increased-memory + extended-vaddr
 │   └── ExportOptions.plist         App Store distribution config
