@@ -1,0 +1,46 @@
+name: SDK version consistency
+
+# Verify all three reference apps (Mac, iPad, iPhone) pin the same
+# bithuman-sdk-public version, matching version.yml at the repo root.
+#
+# Catches the "bumped two of three" footgun where a maintainer updates
+# Mac/Package.swift and iPad/App/project.yml but forgets
+# iPhone/App/project.yml — which only surfaces when an external
+# developer clones and tries to build the third app.
+#
+# This workflow does not consume any user-controlled GitHub event
+# inputs. The only step is a static call into a checked-in shell
+# script with no interpolation.
+
+on:
+  pull_request:
+    paths:
+      - 'version.yml'
+      - 'Mac/Package.swift'
+      - 'iPad/App/project.yml'
+      - 'iPhone/App/project.yml'
+      - 'scripts/check-sdk-version.sh'
+      - '.github/workflows/sdk-version-consistency.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'version.yml'
+      - 'Mac/Package.swift'
+      - 'iPad/App/project.yml'
+      - 'iPhone/App/project.yml'
+      - 'scripts/check-sdk-version.sh'
+      - '.github/workflows/sdk-version-consistency.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Compare app pins against version.yml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run version check
+        run: bash scripts/check-sdk-version.sh
