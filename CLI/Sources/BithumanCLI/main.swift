@@ -596,7 +596,7 @@ func parseArgs() -> CLIArgs {
     // pipeline (LLM/TTS/ASR). Avatar engine stays local. Behaviour
     // mirrors voice + text:
     //   --openai / --local → honour
-    //   key in env or Keychain → cloud
+    //   key in env or key file → cloud
     //   no key → local
     if args.mode == .avatar {
         if args.openAI && args.local {
@@ -2192,7 +2192,7 @@ private func runExpressionVideoSession(args: CLIArgs, modelPath: URL? = nil) asy
 /// will actually drive the main dispatch queue our render loop
 /// depends on.
 /// `bithuman-cli text --openai` entry point. Mirrors the voice
-/// auto-pick: when `OPENAI_API_KEY` is available (env or Keychain)
+/// auto-pick: when `OPENAI_API_KEY` is available (env or key file)
 /// and the user didn't pass `--local`, run text chat through
 /// OpenAI's Chat Completions API instead of the on-device Gemma —
 /// no model downloads, snappier first reply.
@@ -2338,7 +2338,7 @@ func runDoctor() {
 
     let hasKey = !(ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "").isEmpty
         || (BithumanKeychain.loadOpenAIKey()?.isEmpty == false)
-    print("    \(hasKey ? "✓" : "·") OpenAI API key:  \(hasKey ? "available (env or Keychain)" : "not set — voice mode will use --local")")
+    print("    \(hasKey ? "✓" : "·") OpenAI API key:  \(hasKey ? "available (env or key file)" : "not set — voice mode will use --local")")
 
     print("")
     if archOK && ramOK && diskOK {
