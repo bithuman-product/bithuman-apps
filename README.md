@@ -1,12 +1,14 @@
 # bithuman-apps
 
-Reference apps showing how to embed [`bitHumanKit`](https://docs.bithuman.ai/swift-sdk/overview) — the on-device voice + lip-synced avatar SDK by [bitHuman](https://www.bithuman.ai) — on **macOS, iPadOS, and iOS**. Each app is a thin shell over the SDK: windowing + lifecycle + entitlements glue, no engine code. Clone, run one command, get a working avatar.
+Reference apps showing how to embed [`bitHumanKit`](https://docs.bithuman.ai/swift-sdk/overview) — the on-device voice + lip-synced avatar SDK by [bitHuman](https://www.bithuman.ai) — on **macOS, iPadOS, and iOS**, plus a terminal CLI. Each app is a thin shell over the SDK: windowing + lifecycle + entitlements glue, no engine code. Clone, run one command, get a working avatar.
 
-All three apps consume the SDK as a normal Swift Package Manager dependency from the public binary distribution:
+The Swift SDK source lives in [`SDK/`](SDK/) — this is the canonical tree. Mac / iPad / iPhone consume it as a SwiftPM dependency from the public binary distribution:
 
 ```swift
 .package(url: "https://github.com/bithuman-product/bithuman-sdk-public.git", from: "0.8.1")
 ```
+
+The CLI consumes the SDK directly from the in-tree [`SDK/`](SDK/) package via a `path:` dep, since CLI development moves in lockstep with SDK changes. The same `SDK/` tree is what `bithuman-sdk-public` publishes as the `.xcframework.zip` per release.
 
 Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / Kokoro) → bitHuman avatar engine (Wav2Vec2 → DiT → VAE → ANE). Full architecture, hardware floor, pricing, and integration docs live at **[docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview)**.
 
@@ -14,9 +16,11 @@ Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / 
 
 | Variant | Path     | Form factor                 | Walkthrough             |
 | ------- | -------- | --------------------------- | ----------------------- |
+| SDK     | [`SDK/`](SDK/)       | `bitHumanKit` library + cloud transport | [SDK/README.md](SDK/README.md)       |
 | Mac     | [`Mac/`](Mac/)       | Sparkle-updateable .app + DMG | [Mac/README.md](Mac/README.md)       |
 | iPad    | [`iPad/`](iPad/)     | Stage-Manager widget + PiP    | [iPad/README.md](iPad/README.md)     |
 | iPhone  | [`iPhone/`](iPhone/) | Portrait, smaller LLM         | [iPhone/README.md](iPhone/README.md) |
+| CLI     | [`CLI/`](CLI/)       | Terminal voice/avatar chat (`brew install bithuman-cli`) | [CLI/README.md](CLI/README.md)       |
 | Demos   | [`demos/`](demos/)   | Showcase apps (kiosk, tutor, NPC, ...) | [demos/README.md](demos/README.md)   |
 
 ### Essence vs Expression — one factory, both runtimes
