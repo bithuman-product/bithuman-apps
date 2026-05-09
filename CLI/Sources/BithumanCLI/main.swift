@@ -748,8 +748,11 @@ private func fatalKey() -> Never {
 }
 
 private func fatalUsage(_ message: String) -> Never {
-    FileHandle.standardError.write(Data("error: \(message)\n\n".utf8))
-    FileHandle.standardError.write(Data((helpText + "\n").utf8))
+    // Tight error first, then a one-liner pointer to --help. Dumping
+    // the full help text on every malformed flag was producing an
+    // overwhelming wall of output that buried the actual cause.
+    FileHandle.standardError.write(Data("error: \(message)\n".utf8))
+    FileHandle.standardError.write(Data("Run `bithuman-cli --help` for usage.\n".utf8))
     exit(2)
 }
 
