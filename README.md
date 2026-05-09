@@ -2,13 +2,13 @@
 
 Reference apps showing how to embed [`bitHumanKit`](https://docs.bithuman.ai/swift-sdk/overview) — the on-device voice + lip-synced avatar SDK by [bitHuman](https://www.bithuman.ai) — on **macOS, iPadOS, and iOS**, plus a terminal CLI. Each app is a thin shell over the SDK: windowing + lifecycle + entitlements glue, no engine code. Clone, run one command, get a working avatar.
 
-The Swift SDK source lives in [`SDK/`](SDK/) — this is the canonical tree. Mac / iPad / iPhone consume it as a SwiftPM dependency from the public binary distribution:
+The Swift SDK source lives in [`bithuman-product/bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk) (alongside the Python SDK). Mac / iPad / iPhone consume it as a SwiftPM dependency from the public binary distribution:
 
 ```swift
 .package(url: "https://github.com/bithuman-product/bithuman-sdk-public.git", from: "0.8.1")
 ```
 
-The CLI consumes the SDK directly from the in-tree [`SDK/`](SDK/) package via a `path:` dep, since CLI development moves in lockstep with SDK changes. The same `SDK/` tree is what `bithuman-sdk-public` publishes as the `.xcframework.zip` per release.
+The CLI consumes the SDK source directly via SwiftPM `path:` dep against a sibling clone of `bithuman-sdk` — see [`CLI/README.md`](CLI/README.md#workspace-layout-for-development) for the workspace convention. CLI development moves in lockstep with SDK changes, so the source dep keeps the iteration loop tight.
 
 Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / Kokoro) → bitHuman avatar engine (Wav2Vec2 → DiT → VAE → ANE). Full architecture, hardware floor, pricing, and integration docs live at **[docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview)**.
 
@@ -16,7 +16,6 @@ Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / 
 
 | Variant | Path     | Form factor                 | Walkthrough             |
 | ------- | -------- | --------------------------- | ----------------------- |
-| SDK     | [`SDK/`](SDK/)       | `bitHumanKit` library + cloud transport | [SDK/README.md](SDK/README.md)       |
 | Mac     | [`Mac/`](Mac/)       | Sparkle-updateable .app + DMG | [Mac/README.md](Mac/README.md)       |
 | iPad    | [`iPad/`](iPad/)     | Stage-Manager widget + PiP    | [iPad/README.md](iPad/README.md)     |
 | iPhone  | [`iPhone/`](iPhone/) | Portrait, smaller LLM         | [iPhone/README.md](iPhone/README.md) |

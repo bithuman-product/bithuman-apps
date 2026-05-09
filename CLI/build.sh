@@ -58,7 +58,7 @@ fi
 # extracted into DerivedData's SourcePackages/artifacts cache. Then
 # patch the macOS slice headers (the LiveKitWebRTC xcframework's
 # macOS slice ships only the umbrella header — see
-# ../SDK/scripts/patch-webrtc-macos.sh, kept next to the SDK package
+# ../../bithuman-sdk/swift/scripts/patch-webrtc-macos.sh, kept next to the SDK package
 # that owns the libwebrtc dep).
 # The subsequent `xcodebuild build` uses the cached resolution so
 # our patches survive.
@@ -68,7 +68,7 @@ xcodebuild \
   -configuration "$CONFIG" \
   -skipMacroValidation \
   -resolvePackageDependencies > /tmp/bithuman-cli.resolve.log 2>&1
-../SDK/scripts/patch-webrtc-macos.sh
+../../bithuman-sdk/swift/scripts/patch-webrtc-macos.sh
 
 xcodebuild \
   -scheme bithuman-cli \
