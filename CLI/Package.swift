@@ -9,10 +9,22 @@ import PackageDescription
 // https://github.com/bithuman-product/homebrew-bithuman.
 //
 // The CLI is a thin wrapper around the `bitHumanKit` SDK + the optional
-// `BithumanRealtimeOpenAI` cloud transport. Both come from a sibling
-// package at `../SDK` in this monorepo; CLI/Sources/BithumanCLI/ holds
-// only CLI-specific code (arg parsing, mode dispatch, runners, terminal
-// rendering, key storage, billing display).
+// `BithumanRealtimeOpenAI` cloud transport. Both come from the
+// `bithuman-product/bithuman-sdk` private monorepo (the canonical
+// engine source-of-truth, alongside the Python SDK). For local
+// development the dep is resolved via SwiftPM `path:` against a sibling
+// clone — i.e., we expect:
+//
+//   ~/your-workspace/
+//   ├── bithuman-sdk/        (cloned from bithuman-product/bithuman-sdk)
+//   └── bithuman-apps/       (cloned from bithuman-product/bithuman-apps)
+//
+// `swift build` from this directory then resolves
+// `../../bithuman-sdk/swift` and pulls bitHumanKit + BithumanRealtimeOpenAI.
+//
+// CI and the brew release pipeline (release.sh) check out both repos
+// side-by-side before invoking the build, so the same `path:` dep
+// resolves there too.
 //
 // The executable PRODUCT is `bithuman-cli` (with the hyphen); the
 // internal target is `BithumanCLI` (CamelCase, since Swift target names
@@ -28,19 +40,18 @@ let package = Package(
         .executable(name: "bithuman-cli", targets: ["BithumanCLI"]),
     ],
     dependencies: [
-        // The SDK lives in a sibling directory in this monorepo.
-        // `path:` keeps the dev loop tight: edit SDK source, rebuild
-        // CLI, no checkout/release cycle. The same `bithuman-apps/SDK`
-        // tree is what the public binary distribution at
-        // bithuman-product/bithuman-sdk-public is produced from.
-        .package(path: "../SDK"),
+        // Sibling-clone path dep on the bithuman-sdk monorepo's swift/
+        // package. See the comment block above for the expected
+        // workspace layout. Both `bitHumanKit` and `BithumanRealtimeOpenAI`
+        // products are exposed by that package.
+        .package(path: "../../bithuman-sdk/swift"),
     ],
     targets: [
         .executableTarget(
             name: "BithumanCLI",
             dependencies: [
-                .product(name: "bitHumanKit", package: "SDK"),
-                .product(name: "BithumanRealtimeOpenAI", package: "SDK"),
+                .product(name: "bitHumanKit", package: "swift"),
+                .product(name: "BithumanRealtimeOpenAI", package: "swift"),
             ],
             path: "Sources/BithumanCLI",
             swiftSettings: [.swiftLanguageMode(.v5)]

@@ -21,15 +21,24 @@ CLI/
 ├── Sources/
 │   └── BithumanCLI/        Executable: arg parsing, mode dispatch, runners,
 │                           terminal rendering, key storage, billing display
-├── Package.swift           SPM manifest — depends on ../SDK via path:
+├── Package.swift           SPM manifest — depends on bithuman-sdk via path:
 ├── build.sh                Release build + Developer-ID signing
 └── release.sh              build → notarize → staple → zip → upload artifact
 ```
 
-The CLI is a thin wrapper over the `bitHumanKit` SDK + the optional
-`BithumanRealtimeOpenAI` cloud transport. Both come from the sibling
-[`SDK/`](../SDK) package in this monorepo. Edits to engine code happen
-in `../SDK/Sources/`; this directory holds only CLI-specific code.
+The CLI is a thin wrapper over the [`bitHumanKit`](https://github.com/bithuman-product/bithuman-sdk) SDK + the optional `BithumanRealtimeOpenAI` cloud transport. Both come from `bithuman-product/bithuman-sdk` (the canonical engine source-of-truth, alongside the Python SDK), consumed via SwiftPM `path:` dep.
+
+## Workspace layout (for development)
+
+The `path:` dep in `Package.swift` expects sibling clones:
+
+```
+~/your-workspace/
+├── bithuman-sdk/      ← cloned from bithuman-product/bithuman-sdk
+└── bithuman-apps/     ← cloned from bithuman-product/bithuman-apps
+```
+
+`swift build` from this directory then resolves `../../bithuman-sdk/swift` and pulls `bitHumanKit` + `BithumanRealtimeOpenAI`.
 
 ## Build
 
@@ -41,10 +50,10 @@ swift build --product bithuman-cli -c release
 Signed + notarized for the Homebrew release:
 
 ```bash
-./release.sh 0.12.0
+./release.sh 0.13.0
 ```
 
-Outputs `dist/bithuman-cli-0.12.0.zip`. Upload to a tagged release on
+Outputs `dist/bithuman-cli-0.13.0.zip`. Upload to a tagged release on
 [homebrew-bithuman](https://github.com/bithuman-product/homebrew-bithuman/releases),
 then bump the formula's `version` + `sha256` in
 `homebrew-bithuman/Formula/bithuman-cli.rb` and push.
