@@ -1,0 +1,3 @@
+# build.sh writes a wrapper in this dir pointing at the just-built
+# binary in DerivedData. Local dev artifact; never committed.
+bithuman-cli
