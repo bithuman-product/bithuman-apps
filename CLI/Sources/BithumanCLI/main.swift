@@ -2390,9 +2390,43 @@ func runDoctor() {
     let diskOK = freeGB >= 10
     print("    \(diskOK ? "✓" : "!") Free disk:       \(String(format: "%.1f GB", freeGB))\(diskOK ? "" : "  (need ~10 GB for cold start)")")
 
-    let hasKey = !(ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "").isEmpty
-        || (BithumanKeychain.loadOpenAIKey()?.isEmpty == false)
-    print("    \(hasKey ? "✓" : "·") OpenAI API key:  \(hasKey ? "available (env or key file)" : "not set — voice mode will use --local")")
+    // OpenAI key — used by `--openai` cloud paths for text/voice/avatar.
+    let openaiSource: String?
+    if !(ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "").isEmpty {
+        openaiSource = "env"
+    } else if BithumanKeychain.loadOpenAIKey()?.isEmpty == false {
+        openaiSource = "key file"
+    } else {
+        openaiSource = nil
+    }
+    print("    \(openaiSource != nil ? "✓" : "·") OpenAI API key:  \(openaiSource.map { "available (\($0))" } ?? "not set — voice/avatar/text will use --local")")
+
+    // bitHuman key — used by avatar (Expression + Essence) for the
+    // per-minute billing heartbeat to api.bithuman.ai. Sources, in
+    // priority order:
+    //   1. BITHUMAN_API_KEY env var (developer override)
+    //   2. ~/Library/Application Support/com.bithuman.cli/bithuman-api-key
+    //   3. The key compiled into this binary at release time
+    //      (brew distribution ships a bundled key; source checkouts
+    //      and CI builds don't have one — see EmbeddedKey.swift).
+    // Without any of these, avatar mode runs unmetered (the auth
+    // service permits this for development) but live cost / balance
+    // feedback won't surface.
+    let bhSource: String?
+    if !(ProcessInfo.processInfo.environment["BITHUMAN_API_KEY"] ?? "").isEmpty {
+        bhSource = "env"
+    } else if let saved = try? String(contentsOf: FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        .first!.appendingPathComponent("com.bithuman.cli/bithuman-api-key"),
+        encoding: .utf8),
+        !saved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        bhSource = "key file"
+    } else if BithumanEmbeddedKey.value != nil {
+        bhSource = "bundled with brew distribution"
+    } else {
+        bhSource = nil
+    }
+    print("    \(bhSource != nil ? "✓" : "·") bitHuman API key: \(bhSource.map { "available (\($0))" } ?? "not set — avatar runs unmetered (dev mode); get one at https://www.bithuman.ai/#developer")")
 
     print("")
     if archOK && ramOK && diskOK {
