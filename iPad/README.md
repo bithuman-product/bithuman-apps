@@ -45,10 +45,14 @@ iPad/
 
 ### `App/project.yml`
 
-xcodegen spec. **Key edit vs the dev repo**: `packages.bithuman-kit`
-points at the public GitHub URL, not a local path. External devs get
-a clean SPM resolve out of the box — no checkout of the SDK source
-required.
+xcodegen spec. The `packages.bithuman-sdk-public` entry pins the
+public SwiftPM binary distribution at
+`github.com/bithuman-product/bithuman-sdk-public.git`. External devs
+get a clean SPM resolve out of the box — no checkout of the SDK
+source required. Bump the pinned version here when a new SDK release
+is published; CI's `sdk-version-consistency.yml` will refuse PRs
+that skew this against `Mac/Package.swift`, `iPhone/App/project.yml`,
+and the root `version.yml`.
 
 ### `Sources/BithumanPadApp.swift`
 
