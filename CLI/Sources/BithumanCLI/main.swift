@@ -104,15 +104,16 @@ let helpText = """
                           auto-pick as voice mode: OpenAI Realtime
                           when a key is set (avatar renders locally
                           via lipsync tap on the WebRTC bot audio
-                          track), fully on-device otherwise (~7 GB).
-                          With no `--identity`, the bundled Diego
-                          Expression agent's weights are auto-fetched
-                          on first run. Pass `.imx` for an Essence
-                          bundle or an image for a custom Expression
-                          portrait. Right-click the avatar to pick
-                          from 8 bundled agents, drag-drop a photo to
-                          swap the face, audition voices, or edit the
-                          prompt.
+                          track), fully on-device otherwise.
+                          With no `--identity`, the bundled Coach
+                          Mason Essence agent (~118 MB) is auto-
+                          fetched on first run — fastest path to a
+                          working avatar. Pass `--identity <agent.imx>`
+                          for a different Essence agent, or
+                          `--image <portrait>` for a custom-portrait
+                          Expression avatar (~1.56 GB engine). Right-
+                          click the avatar to swap agents, audition
+                          voices, or edit the prompt.
 
                           (Old name `video` is still accepted as a
                           hidden alias for backward compatibility.)
@@ -625,7 +626,17 @@ func parseArgs() -> CLIArgs {
 
 @MainActor
 private func resolveVoice(_ args: CLIArgs) async -> VoiceSelection {
-    guard let raw = args.voiceArg else { return .default }
+    guard let raw = args.voiceArg else {
+        // No --voice → Coach Mason persona's calm-masculine Qwen3
+        // preset, matching the default systemPrompt so all defaults
+        // line up. Falls back to .default if the preset isn't in
+        // the recognised list (defensive — the constant is in the
+        // presetNames in practice).
+        if let canonical = VoiceSelection.canonicalPreset(matching: DefaultEssenceAgent.qwen3Voice) {
+            return .preset(canonical)
+        }
+        return .default
+    }
     if let canonical = VoiceSelection.canonicalPreset(matching: raw) {
         return .preset(canonical)
     }
@@ -769,6 +780,14 @@ private func makeConfig(_ args: CLIArgs) -> VoiceChatConfig {
             fatalUsage("--prompt: couldn't read '\(raw)'. Pass inline text or @path/to/file.txt.")
         }
         config.systemPrompt = resolved
+    } else {
+        // No --prompt → fall back to the Coach Mason persona used by
+        // the default Essence avatar, so text + voice + avatar modes
+        // share one coherent character on first run. The avatar
+        // Essence runner overrides this at .imx load time when the
+        // .imx already encodes its own prompt; that path doesn't see
+        // this fallback, so the override is fine.
+        config.systemPrompt = DefaultEssenceAgent.systemPrompt
     }
     // Resolve the avatar API key in priority order:
     //   1. BITHUMAN_API_KEY env (developer override)
@@ -991,13 +1010,42 @@ func runVideoSession(args: CLIArgs) async throws {
                 """)
         }
     }
-    // No `--model` / `--identity` was supplied — default to the
-    // Expression engine with the bundled Diego portrait. Auto-pick
-    // cloud (WebRTC) when an OpenAI key is set, otherwise local.
+    // No `--model` / `--identity` was supplied. Two cases:
+    //
+    //   1. `--image <portrait>` was supplied — user explicitly wants
+    //      a custom-portrait Expression avatar. Stay on Expression
+    //      with the supplied JPG/PNG (existing behavior).
+    //
+    //   2. Neither `--image` nor `--model` was supplied — default
+    //      to the bundled Essence agent (Coach Mason, A71DAR6308).
+    //      Essence is the right default: ~118 MB to download +
+    //      warm-boot in ~5 s, vs Expression's ~1.56 GB engine and
+    //      ~60 s first-run compile. Per-agent voice + portrait are
+    //      baked into the .imx so the user gets a complete persona
+    //      out of the box without any flags.
+    if args.imageArg != nil {
+        // Case 1 — Expression with custom portrait.
+        if args.openAI {
+            try await runExpressionVideoSessionOpenAIWebRTC(args: args, modelPath: nil)
+        } else {
+            try await runExpressionVideoSession(args: args, modelPath: nil)
+        }
+        return
+    }
+
+    // Case 2 — fetch the default Essence agent + dispatch.
+    let defaultURL: URL
+    do {
+        FileHandle.standardError.write(Data(
+            "ℹ️  Defaulting to \(DefaultEssenceAgent.displayName) (\(DefaultEssenceAgent.agentCode)). Pass `--identity <path>` for a different avatar.\n".utf8))
+        defaultURL = try await DefaultEssenceAgent.ensureAvailable(progress: nil)
+    } catch {
+        fatalUsage("default Essence agent download failed: \(error.localizedDescription)")
+    }
     if args.openAI {
-        try await runExpressionVideoSessionOpenAIWebRTC(args: args, modelPath: nil)
+        try await runEssenceVideoSessionOpenAIWebRTC(args: args, modelPath: defaultURL)
     } else {
-        try await runExpressionVideoSession(args: args, modelPath: nil)
+        try await runEssenceVideoSession(args: args, modelPath: defaultURL)
     }
 }
 
@@ -1439,11 +1487,13 @@ private func runExpressionVideoSessionOpenAIWebRTC(
     }
 
     // Resolve the portrait identity. With `--identity <image>` /
-    // `--image <path>` we use that face; otherwise the bundled default
-    // agent (Diego) — same default as local Expression mode.
+    // `--image <path>` we use that face; otherwise the bundled
+    // Diego portrait — but persona text + voice come from the
+    // unified Coach Mason default so all modes (text/voice/avatar)
+    // read with one consistent voice.
     let defaultAgent = AgentCatalog.defaultAgent
     if instructions == nil {
-        instructions = defaultAgent.systemPrompt
+        instructions = DefaultEssenceAgent.systemPrompt
     }
     let portraitURL = resolvePortrait(args.imageArg)
         ?? AgentCatalog.thumbnailURL(for: defaultAgent)
@@ -2096,26 +2146,27 @@ private func runExpressionVideoSession(args: CLIArgs, modelPath: URL? = nil) asy
             silenceStderr: true
         )
     }
-    // Fresh-user default: Diego (face + voice + prompt) unless the
-    // CLI flags override pieces individually. Bake the portrait into
-    // the avatar engine at boot so we don't pay a runtime VAE encode
-    // for the default — instant Diego on first frame.
+    // Fresh-user default: Coach Mason persona (prompt + Kokoro voice)
+    // applied over Diego's bundled portrait when no `--image` is
+    // supplied. The same persona is shared across text / voice /
+    // avatar modes so the CLI's no-flag UX feels coherent. CLI flags
+    // override pieces individually (--prompt, --voice, --image).
     let defaultAgent = AgentCatalog.defaultAgent
     let portraitURL = resolvePortrait(args.imageArg)
         ?? AgentCatalog.thumbnailURL(for: defaultAgent)
-    let initialPrompt = args.promptArg ?? defaultAgent.systemPrompt
+    let initialPrompt = args.promptArg ?? DefaultEssenceAgent.systemPrompt
 
     // Resolve the Kokoro preset for video mode. parseArgs has already
     // validated args.voiceArg against the Kokoro list (rejecting paths
     // and Qwen3 names); here we just canonicalise case and fall back
-    // to the default agent's preset if --voice wasn't supplied. We
-    // intentionally do NOT call resolveVoice() — that's Qwen3-shaped
-    // and config.voice is ignored when avatar is configured.
+    // to the Coach Mason default Kokoro voice if --voice wasn't
+    // supplied. We intentionally do NOT call resolveVoice() — that's
+    // Qwen3-shaped and config.voice is ignored when avatar is configured.
     let voicePreset: String = args.voiceArg
         .flatMap { raw in
             VoiceChat.availableAvatarVoices.first { $0.lowercased() == raw.lowercased() }
         }
-        ?? defaultAgent.voicePreset
+        ?? DefaultEssenceAgent.kokoroVoice
 
     var config = makeConfig(args)
     config.avatar = AvatarConfig(modelPath: weightsURL, portraitPath: portraitURL)
