@@ -26,13 +26,11 @@ import SwiftUI
 struct BithumanMacApp: App {
     @NSApplicationDelegateAdaptor(BithumanMacAppDelegate.self) private var appDelegate
 
-    init() {
-        // The framework's main menu (Cmd-Q, edit menu, etc) — same one
-        // the CLI installs. Safe to call from `init`; SwiftUI installs
-        // its own menu items on top, but the file/edit/window/help
-        // structure we want is already there.
-        installMainMenu()
-    }
+    // The framework's main menu is installed from
+    // `BithumanAppDelegate.applicationDidFinishLaunching` once `NSApp`
+    // is up. Don't call `installMainMenu()` from this struct's `init` —
+    // `NSApp.mainMenu` is still nil at that point and the SDK's
+    // implicit-unwrap on it crashes the app on launch.
 
     var body: some Scene {
         // No SwiftUI scene. AvatarWindow is created imperatively from
@@ -58,8 +56,13 @@ struct BithumanMacApp: App {
 /// extend by inheritance.
 @MainActor
 final class BithumanMacAppDelegate: BithumanAppDelegate {
+    // `@objc` matters: SwiftUI's `@NSApplicationDelegateAdaptor` resolves
+    // the delegate via the Objective-C runtime (`+alloc init`). Without
+    // `@objc` the lookup falls through to `BithumanAppDelegate`'s
+    // unimplemented no-arg `init()` instead of this override and the
+    // app crashes before reaching `applicationDidFinishLaunching`.
     @MainActor
-    init() {
+    @objc init() {
         super.init(onLaunch: {
             try await videoSessionLaunch()
         })

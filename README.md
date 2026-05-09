@@ -44,7 +44,7 @@ iPhone is intentionally not in scope for the Essence demo this phase: the 8 GB i
 
 ## Mac
 
-![](docs/img/mac-hero.webp)
+![](docs/img/hero.webp)
 
 A SwiftUI App-lifecycle binary that wraps the SDK's `AvatarCoordinator` + `AvatarWindow` graph. Launches into video mode (no terminal), right-click the avatar to swap agent / voice / face / prompt. Ships as a Sparkle-updateable, hardened-runtime, notarised `.app`. Standalone SPM package — `swift run` and you're talking to an avatar in 30 seconds.
 
@@ -57,7 +57,7 @@ Walkthrough: [Mac/README.md](Mac/README.md). For deployment-side topics (sandbox
 
 ## iPad
 
-![](docs/img/ipad-hero.webp)
+![](docs/img/ipad-widget.webp)
 
 iPadOS app with a 320 pt Stage Manager floating widget, a draggable Picture-in-Picture float, and PhotosPicker face swap. Wrapped by an Xcode project (xcodegen-driven) so it ships through TestFlight / App Store. Targets 16 GB M-series iPad Pro; uses `increased-memory-limit` + `extended-virtual-addressing` entitlements.
 
@@ -71,7 +71,7 @@ Walkthrough: [iPad/README.md](iPad/README.md). For iOS-side topics (entitlements
 
 ## iPhone
 
-![](docs/img/iphone-hero.webp)
+![](docs/img/portrait-picker.webp)
 
 Phone-form-factor variant — portrait-locked, single-orientation frame pump, smaller LLM (Gemma 3 1B QAT 4-bit, ~800 MB) so it fits the iOS memory budget without paging. Same SDK, same avatar engine; the windowing + memory-budget tuning is what differs from iPad.
 
