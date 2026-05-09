@@ -2390,9 +2390,79 @@ func runDoctor() {
     let diskOK = freeGB >= 10
     print("    \(diskOK ? "✓" : "!") Free disk:       \(String(format: "%.1f GB", freeGB))\(diskOK ? "" : "  (need ~10 GB for cold start)")")
 
-    let hasKey = !(ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "").isEmpty
-        || (BithumanKeychain.loadOpenAIKey()?.isEmpty == false)
-    print("    \(hasKey ? "✓" : "·") OpenAI API key:  \(hasKey ? "available (env or key file)" : "not set — voice mode will use --local")")
+    // OpenAI key — used by `--openai` cloud paths for text/voice/avatar.
+    let openaiSource: String?
+    if !(ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "").isEmpty {
+        openaiSource = "env"
+    } else if BithumanKeychain.loadOpenAIKey()?.isEmpty == false {
+        openaiSource = "key file"
+    } else {
+        openaiSource = nil
+    }
+    print("    \(openaiSource != nil ? "✓" : "·") OpenAI API key:  \(openaiSource.map { "available (\($0))" } ?? "not set — voice/avatar/text will use --local")")
+
+    // bitHuman key — used by avatar (Expression + Essence) for the
+    // per-minute billing heartbeat to api.bithuman.ai. Sources, in
+    // priority order:
+    //   1. BITHUMAN_API_KEY env var (developer override)
+    //   2. ~/Library/Application Support/com.bithuman.cli/bithuman-api-key
+    //   3. The key compiled into this binary at release time
+    //      (brew distribution ships a bundled key; source checkouts
+    //      and CI builds don't have one — see EmbeddedKey.swift).
+    // Without any of these, avatar mode runs unmetered (the auth
+    // service permits this for development) but live cost / balance
+    // feedback won't surface.
+    let bhSource: String?
+    if !(ProcessInfo.processInfo.environment["BITHUMAN_API_KEY"] ?? "").isEmpty {
+        bhSource = "env"
+    } else if let saved = try? String(contentsOf: FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask)
+        .first!.appendingPathComponent("com.bithuman.cli/bithuman-api-key"),
+        encoding: .utf8),
+        !saved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        bhSource = "key file"
+    } else if BithumanEmbeddedKey.value != nil {
+        bhSource = "bundled with brew distribution"
+    } else {
+        bhSource = nil
+    }
+    print("    \(bhSource != nil ? "✓" : "·") bitHuman API key: \(bhSource.map { "available (\($0))" } ?? "not set — avatar runs unmetered (dev mode); get one at https://www.bithuman.ai/#developer")")
+
+    // Capability matrix — quickly resolve which modes / models the
+    // host can actually run, so the user doesn't discover a hardware
+    // gap five minutes into a download. Each row is independent;
+    // cloud paths require the OpenAI key, on-device paths require
+    // arm64 + macOS 26.
+    let chip = appleSiliconBrand()    // e.g. "M5", "M3 Pro", or nil on x86
+    let chipGen = appleSiliconGeneration() ?? 0
+    print("\n    Capabilities:")
+    if let chip = chip {
+        let chipBadge = chipGen >= 3 ? "✓" : "!"
+        let chipNote = chipGen >= 3 ? "" : "  (M3+ recommended for Expression avatar)"
+        print("    \(chipBadge) Chip:              Apple \(chip)\(chipNote)")
+    } else {
+        print("    ✗ Chip:              non-Apple-Silicon — avatar + on-device LLM/TTS unavailable")
+    }
+    let onDeviceOK = archOK   // arm64 covers macOS 26 + Apple Silicon
+    let cloudOpenAIOK = openaiSource != nil
+    func row(_ icon: String, _ label: String, _ note: String) {
+        print("    \(icon) \(label)\(note.isEmpty ? "" : "  — \(note)")")
+    }
+    row(onDeviceOK ? "✓" : "✗", "Avatar Essence (local):     ",
+        onDeviceOK ? "any Apple Silicon, ~118 MB default agent" : "needs Apple Silicon")
+    row((onDeviceOK && chipGen >= 3) ? "✓" : (onDeviceOK ? "!" : "✗"),
+        "Avatar Expression (local):  ",
+        chipGen >= 3 ? "your chip is supported" : (onDeviceOK ? "M3+ required for sustainable lipsync" : "needs Apple Silicon"))
+    row(cloudOpenAIOK ? "✓" : "·", "Avatar (cloud lipsync):     ",
+        cloudOpenAIOK ? "OpenAI Realtime + local lipsync tap" : "set OPENAI_API_KEY to enable")
+    row(onDeviceOK ? "✓" : "✗", "Voice (local):              ",
+        onDeviceOK ? "MLX Gemma + Qwen3-TTS, ~5 GB first run" : "needs Apple Silicon")
+    row(cloudOpenAIOK ? "✓" : "·", "Voice (cloud):              ",
+        cloudOpenAIOK ? "OpenAI Realtime over WebRTC" : "set OPENAI_API_KEY to enable")
+    row(onDeviceOK ? "✓" : "✗", "Text (local):               ",
+        onDeviceOK ? "MLX Gemma 3n E2B 4-bit, ~2 GB" : "needs Apple Silicon")
+    row(cloudOpenAIOK ? "✓" : "·", "Text (cloud):               ",
+        cloudOpenAIOK ? "OpenAI Chat Completions" : "set OPENAI_API_KEY to enable")
 
     print("")
     if archOK && ramOK && diskOK {
@@ -2468,6 +2538,24 @@ private func appleSiliconGeneration() -> Int? {
     let tail = brand[mIdx...]
     let digits = tail.prefix(while: { $0.isNumber })
     return Int(digits)
+}
+
+/// Brand-string fragment for display ("M5", "M3 Pro", "M4 Max").
+/// Strips the "Apple " prefix and any trailing whitespace, returns
+/// nil on Intel hosts where the sysctl returns an x86 brand instead.
+private func appleSiliconBrand() -> String? {
+    var size: size_t = 0
+    sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+    guard size > 0 else { return nil }
+    var buf = [CChar](repeating: 0, count: size)
+    sysctlbyname("machdep.cpu.brand_string", &buf, &size, nil, 0)
+    let brand = String(cString: buf).trimmingCharacters(in: .whitespaces)
+    // Apple chip strings start "Apple M…". Anything else is Intel
+    // (or future/unknown silicon) — return nil so callers fall
+    // through to the generic ✗ row.
+    guard brand.hasPrefix("Apple M") else { return nil }
+    let stripped = brand.replacingOccurrences(of: "Apple ", with: "")
+    return stripped.isEmpty ? nil : stripped
 }
 
 /// One-line hint about whether the user's hardware is well-suited
