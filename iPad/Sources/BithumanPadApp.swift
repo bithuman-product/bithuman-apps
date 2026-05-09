@@ -84,6 +84,8 @@ struct BithumanPadApp: App {
                     }
             case .unsupported(let reason):
                 UnsupportedDeviceView(reason: reason)
+            @unknown default:
+                UnsupportedDeviceView(reason: "Unrecognised device capability returned by bitHumanKit. Update the app to a newer release.")
             }
         }
     }

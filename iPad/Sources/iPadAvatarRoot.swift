@@ -150,6 +150,7 @@ struct iPadAvatarRoot: View {
         case .verifyingDownloaded:             return 1.0
         case .verifying:                       return nil
         case .ready:                           return lifecycle.warmingProgress
+        @unknown default:                      return nil
         }
     }
 
@@ -162,6 +163,8 @@ struct iPadAvatarRoot: View {
         case .ready:
             return "\(Int((lifecycle.warmingProgress * 100).rounded()))%"
         case .verifyingDownloaded, .verifying:
+            return nil
+        @unknown default:
             return nil
         }
     }
@@ -191,6 +194,8 @@ struct iPadAvatarRoot: View {
             return "warming up the engine…"
         case .verifyingDownloaded, .verifying:
             return nil
+        @unknown default:
+            return nil
         }
     }
 
@@ -211,6 +216,7 @@ struct iPadAvatarRoot: View {
         case .verifyingDownloaded:  return "verifying"
         case .verifying:            return nil
         case .ready:                return nil  // percentage replaces it
+        @unknown default:           return nil
         }
     }
 

@@ -74,6 +74,8 @@ struct iPhoneAvatarRoot: View {
                 DownloadProgressView(phase: lifecycle.downloadPhase, side: 240)
             case .verifying, .ready:
                 LoadingParticleField(size: 280, caption: "warming models…")
+            @unknown default:
+                LoadingParticleField(size: 280, caption: "warming models…")
             }
         }
     }
