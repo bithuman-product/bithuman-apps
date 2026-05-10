@@ -47,7 +47,18 @@ enum FlagHint {
         Inline string: --prompt "You are a helpful assistant."
           File path:     --prompt @/path/to/prompt.txt
         """
-    static let openAIModel = "OpenAI Realtime model id, e.g. gpt-realtime-mini (default), gpt-realtime."
+    /// The flag is shared across modes but the eligible models split
+    /// in two — Realtime API for voice/avatar (one-shot streaming
+    /// audio in/out), Chat Completions API for text. Surfacing both
+    /// rows + a pointer to the canonical list keeps users from
+    /// guessing model names from the OpenAI docs in another tab.
+    static let openAIModel = """
+        Defaults differ by mode (the flag is shared):
+            voice / avatar (Realtime API): gpt-realtime-mini (default), gpt-realtime
+            text           (Chat API):     gpt-4o-mini (default), gpt-4o, gpt-4.1-mini, gpt-4.1, o4-mini
+          Any model your OpenAI account has access to works. Full list:
+          https://platform.openai.com/docs/models
+        """
 }
 
 /// Pull the next positional value off the arg iterator for the
