@@ -2531,6 +2531,12 @@ func runCleanup() {
         // result reusable across launches; wiping it here is fine
         // because the user is asking for a cold-start anyway.
         "\(home)/Library/Caches/com.bithuman.expression-extracted",
+        // ANE compiled-graph cache (com.apple.e5rt.e5bundlecache) +
+        // URLCache that NSURLSession populates here — both regenerate
+        // on next inference / next request, both can grow to ~1 GB.
+        // Hosted under "bithuman/" because that's the process's
+        // declared cache namespace; the OS doesn't move it for us.
+        "\(home)/Library/Caches/bithuman",
         // Per-identity idle-frame palindrome cache (see
         // IdleFrameDiskCache). 12 MB per identity, regenerable
         // from the engine on next launch.
