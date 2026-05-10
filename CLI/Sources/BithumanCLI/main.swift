@@ -767,6 +767,54 @@ private func fatalUsage(_ message: String) -> Never {
     exit(2)
 }
 
+/// Avatar mode requires a bitHuman API key — there is no unmetered
+/// fallback. Print the setup hint that mirrors `doctor` and exit.
+private func fatalBitHumanKeyMissing() -> Never {
+    let msg = """
+
+    error: avatar mode requires a bitHuman API key.
+
+    Get a key at \(BithumanKey.signupURL) and either:
+        export BITHUMAN_API_KEY=...
+        # or save it to the 0600 key file:
+        echo "<key>" > ~/Library/Application\\ Support/com.bithuman.cli/bithuman-api-key
+        chmod 600 ~/Library/Application\\ Support/com.bithuman.cli/bithuman-api-key
+
+    Run `bithuman-cli doctor` to verify the key is picked up.
+
+    """
+    FileHandle.standardError.write(Data(msg.utf8))
+    exit(2)
+}
+
+/// The bitHuman billing service refused the supplied key. Surface the
+/// underlying reason — bad credential, insufficient balance, suspended —
+/// without forcing the user to read a Swift stack trace.
+private func fatalBitHumanAuthFailed(_ err: BithumanAuthError) -> Never {
+    let detail: String
+    switch err {
+    case .insufficientBalance(let m):
+        detail = "insufficient balance — \(m)\nTop up at https://www.bithuman.ai/#developer"
+    case .accountSuspended(let m):
+        detail = "account suspended — \(m)\nContact bitHuman support at hello@bithuman.ai"
+    case .invalidResponseShape:
+        detail = "the bitHuman billing service returned an unexpected response. Try again, or contact hello@bithuman.ai if it persists."
+    case .networkFailure(let underlying):
+        detail = "couldn't reach the bitHuman billing service: \(underlying.localizedDescription)\nCheck your network connection and try again."
+    case .unexpectedStatus(let code, _):
+        detail = "the bitHuman billing service returned HTTP \(code). Verify your key at https://www.bithuman.ai/#developer."
+    }
+    let msg = """
+
+    error: bitHuman authentication failed.
+
+    \(detail)
+
+    """
+    FileHandle.standardError.write(Data(msg.utf8))
+    exit(3)
+}
+
 private func warn(_ message: String) {
     FileHandle.standardError.write(Data("warning: \(message)\n".utf8))
 }
@@ -1142,9 +1190,20 @@ private func runEssenceVideoSession(args: CLIArgs, modelPath: URL) async throws 
     // Push the synchronous engine load off the main actor — same
     // rationale as the Expression branch: avoids freezing any
     // SwiftUI redraws during the multi-second weight unpack.
-    let runtime = try await Task.detached(priority: .userInitiated) {
-        try EssenceRuntime.create(modelPath: modelPath)
-    }.value
+    // Async create authenticates with the bitHuman billing service
+    // before returning the runtime. Throws BithumanCreateError.missingAPIKey
+    // when no key is resolvable; throws .authenticationFailed for
+    // expired / suspended / over-balance accounts. We catch + reframe
+    // as a fatalUsage with a one-line setup pointer so users see a
+    // clean error rather than a stack trace.
+    let runtime: EssenceRuntime
+    do {
+        runtime = try await EssenceRuntime.create(modelPath: modelPath, apiSecret: BithumanKey.load())
+    } catch BithumanCreateError.missingAPIKey {
+        fatalBitHumanKeyMissing()
+    } catch BithumanCreateError.authenticationFailed(let underlying) {
+        fatalBitHumanAuthFailed(underlying)
+    }
     let resolution = runtime.resolution
     let size = CGSize(width: resolution.width, height: resolution.height)
 
@@ -1277,9 +1336,20 @@ private func runEssenceVideoSessionOpenAIWebRTC(args: CLIArgs, modelPath: URL) a
     renderer.attach()
 
     boot.update(.loadingEssenceRuntime)
-    let runtime = try await Task.detached(priority: .userInitiated) {
-        try EssenceRuntime.create(modelPath: modelPath)
-    }.value
+    // Async create authenticates with the bitHuman billing service
+    // before returning the runtime. Throws BithumanCreateError.missingAPIKey
+    // when no key is resolvable; throws .authenticationFailed for
+    // expired / suspended / over-balance accounts. We catch + reframe
+    // as a fatalUsage with a one-line setup pointer so users see a
+    // clean error rather than a stack trace.
+    let runtime: EssenceRuntime
+    do {
+        runtime = try await EssenceRuntime.create(modelPath: modelPath, apiSecret: BithumanKey.load())
+    } catch BithumanCreateError.missingAPIKey {
+        fatalBitHumanKeyMissing()
+    } catch BithumanCreateError.authenticationFailed(let underlying) {
+        fatalBitHumanAuthFailed(underlying)
+    }
     let resolution = runtime.resolution
     let size = CGSize(width: resolution.width, height: resolution.height)
 
@@ -1869,9 +1939,20 @@ private func runEssenceVideoSessionOpenAI(args: CLIArgs, modelPath: URL) async t
     renderer.attach()
 
     boot.update(.loadingEssenceRuntime)
-    let runtime = try await Task.detached(priority: .userInitiated) {
-        try EssenceRuntime.create(modelPath: modelPath)
-    }.value
+    // Async create authenticates with the bitHuman billing service
+    // before returning the runtime. Throws BithumanCreateError.missingAPIKey
+    // when no key is resolvable; throws .authenticationFailed for
+    // expired / suspended / over-balance accounts. We catch + reframe
+    // as a fatalUsage with a one-line setup pointer so users see a
+    // clean error rather than a stack trace.
+    let runtime: EssenceRuntime
+    do {
+        runtime = try await EssenceRuntime.create(modelPath: modelPath, apiSecret: BithumanKey.load())
+    } catch BithumanCreateError.missingAPIKey {
+        fatalBitHumanKeyMissing()
+    } catch BithumanCreateError.authenticationFailed(let underlying) {
+        fatalBitHumanAuthFailed(underlying)
+    }
     let resolution = runtime.resolution
     let size = CGSize(width: resolution.width, height: resolution.height)
 
@@ -2419,7 +2500,7 @@ func runDoctor() {
     } else {
         bhSource = nil
     }
-    print("    \(bhSource != nil ? "✓" : "·") bitHuman API key: \(bhSource.map { "available (\($0))" } ?? "not set — avatar runs unmetered (dev mode); get one at https://www.bithuman.ai/#developer")")
+    print("    \(bhSource != nil ? "✓" : "✗") bitHuman API key: \(bhSource.map { "available (\($0))" } ?? "not set — REQUIRED for avatar mode. Get one at https://www.bithuman.ai/#developer")")
 
     // Capability matrix — quickly resolve which modes / models the
     // host can actually run, so the user doesn't discover a hardware
@@ -2535,11 +2616,14 @@ func runDoctor() {
         print("      --openai / --local          # force cloud or on-device backend")
         print("")
         if bhSource == nil {
-            print("    Avatar mode runs unmetered without a bitHuman API key. To enable")
-            print("    live billing + balance feedback, grab a key at")
-            print("    https://www.bithuman.ai/#developer and either:")
-            print("      export BITHUMAN_API_KEY=...")
-            print("      # or save it to ~/Library/Application Support/com.bithuman.cli/bithuman-api-key (mode 0600)")
+            print("    ⚠️  Avatar mode requires a bitHuman API key. Without one,")
+            print("       `bithuman-cli avatar` will refuse to start. Voice + text modes")
+            print("       are unaffected. Grab a key at https://www.bithuman.ai/#developer")
+            print("       and either:")
+            print("          export BITHUMAN_API_KEY=...")
+            print("          # or save it to the 0600 key file:")
+            print("          echo \"<key>\" > ~/Library/Application\\ Support/com.bithuman.cli/bithuman-api-key")
+            print("          chmod 600 ~/Library/Application\\ Support/com.bithuman.cli/bithuman-api-key")
             print("")
         }
     } else {
