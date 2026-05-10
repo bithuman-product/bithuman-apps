@@ -246,6 +246,26 @@
       .on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed)
       .on(RoomEvent.TrackMuted, handleTrackMuted)
       .on(RoomEvent.TrackUnmuted, handleTrackUnmuted)
+      // Browser-side ducking: when LiveKit's local-VAD reports the user
+      // is speaking, hard-mute the bot audio element. This breaks the
+      // acoustic feedback loop at the speaker (no audio out → nothing
+      // for the mic to pick back up). Combined with the bridge's
+      // upstream `lk.clear_buffer` RPC + `response.cancel` to OpenAI,
+      // interruption feels instant: bot goes silent the moment the
+      // user starts talking, even before the upstream cancel lands.
+      // We use `volume = 0` rather than `pause()` so the underlying
+      // MediaStream keeps draining (no buffer build-up that would
+      // replay the just-cancelled audio when we re-enable).
+      .on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        if (!els.botAudio) return;
+        const localId = room?.localParticipant?.identity;
+        const userIsSpeaking = speakers.some((s) => s.identity === localId);
+        if (userIsSpeaking) {
+          els.botAudio.volume = 0;
+        } else {
+          els.botAudio.volume = 1;
+        }
+      })
       .on(RoomEvent.Disconnected, (reason) => {
         log(`disconnected${reason !== undefined ? ` (${reason})` : ""}`);
         teardown();
@@ -271,20 +291,35 @@
       els.roomName.textContent = room.name || ROOM_NAME || "";
 
       // Enable mic. Browser will prompt for permission on this call.
+      // We pass explicit getUserMedia constraints so the browser's
+      // WebRTC AEC + noise-suppression are definitely engaged — these
+      // ARE the platform defaults today, but Safari + corporate-policy
+      // Chrome have been known to override defaults silently. Explicit
+      // wins. Without AEC the user hears their own voice come back
+      // through the speakers as the bot audio plays.
       try {
-        await room.localParticipant.setMicrophoneEnabled(true);
+        await room.localParticipant.setMicrophoneEnabled(true, {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        });
         micEnabled = true;
         refreshMuteBtn();
-        log("microphone enabled");
+        log("microphone enabled (AEC + NS + AGC)");
       } catch (e) {
         showError(`mic error: ${e?.message || e}`);
         micEnabled = false;
         refreshMuteBtn();
       }
 
-      // If avatar/brain were already publishing before we joined, their tracks
-      // come via TrackSubscribed automatically once we connect. Nothing extra needed.
-      setOverlay(true, "Waiting for avatar…", "The avatar feed will appear here.");
+      // If avatar/brain were already publishing before we joined,
+      // TrackSubscribed has already fired and the overlay is hidden.
+      // Only show "Waiting for avatar…" if we're still waiting for that
+      // first video frame — otherwise we'd race the subscribe callback
+      // and re-cover the rendered video with stale text.
+      if (!avatarVideoActive) {
+        setOverlay(true, "Waiting for avatar…", "The avatar feed will appear here.");
+      }
     } catch (err) {
       showError(`connect failed: ${err?.message || err}`);
       setState("error", "Error");
