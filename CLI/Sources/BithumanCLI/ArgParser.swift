@@ -23,7 +23,7 @@ import bitHumanKit
 /// sees both *what* failed and *what to type instead* without
 /// having to re-run with `--help`. Hints are produced lazily so
 /// they can pull live preset lists from the SDK.
-private enum FlagHint {
+enum FlagHint {
     static let locale = "Examples: en-US (default), ja-JP, zh-CN, es-ES, fr-FR. Any BCP-47 code."
 
     /// `--voice` accepts different value shapes per mode/backend.
@@ -100,7 +100,7 @@ internal func closestMatch(_ input: String, in candidates: [String]) -> String? 
 
 /// Iterative DP Levenshtein. Plenty fast for argv-sized inputs; we
 /// don't need the early-exit optimisation here.
-private func levenshtein(_ a: String, _ b: String) -> Int {
+func levenshtein(_ a: String, _ b: String) -> Int {
     let aChars = Array(a)
     let bChars = Array(b)
     if aChars.isEmpty { return bChars.count }
@@ -121,7 +121,7 @@ private func levenshtein(_ a: String, _ b: String) -> Int {
 /// All recognised flags. Single source of truth used by the parser
 /// and the unknown-argument typo suggester. Keep in sync with the
 /// switch in `parseArgs`.
-private let knownFlags: [String] = [
+let knownFlags: [String] = [
     "--locale", "--voice", "--image", "--model", "--identity",
     "--prompt", "--openai", "--local", "--openai-model",
     "-h", "--help",
