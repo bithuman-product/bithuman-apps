@@ -789,19 +789,17 @@ private func makeConfig(_ args: CLIArgs) -> VoiceChatConfig {
         // this fallback, so the override is fine.
         config.systemPrompt = DefaultEssenceAgent.systemPrompt
     }
-    // Resolve the avatar API key in priority order:
-    //   1. BITHUMAN_API_KEY env (developer override)
-    //   2. The key compiled into this binary at release time
-    //      (only present in distributed CLI builds — see
-    //      `BithumanEmbeddedKey.value`).
+    // Resolve the avatar API key in priority order — same as
+    // BithumanKey.load():
+    //   1. BITHUMAN_API_KEY env var
+    //   2. ~/Library/Application Support/com.bithuman.cli/bithuman-api-key
+    //   3. nil → dev-mode unmetered (auth service permits this for
+    //      development; live cost / balance feedback won't surface)
     // Audio-only and text modes don't need this; only video mode
     // hits VoiceChat.start()'s API-key check. Setting it here for
     // all configs keeps the CLI consistent.
-    if let envKey = ProcessInfo.processInfo.environment["BITHUMAN_API_KEY"],
-       !envKey.isEmpty {
-        config.apiKey = envKey
-    } else if let bundled = BithumanEmbeddedKey.value {
-        config.apiKey = bundled
+    if let key = BithumanKey.load() {
+        config.apiKey = key
     }
     return config
 }
@@ -2404,14 +2402,11 @@ func runDoctor() {
     // bitHuman key — used by avatar (Expression + Essence) for the
     // per-minute billing heartbeat to api.bithuman.ai. Sources, in
     // priority order:
-    //   1. BITHUMAN_API_KEY env var (developer override)
+    //   1. BITHUMAN_API_KEY env var
     //   2. ~/Library/Application Support/com.bithuman.cli/bithuman-api-key
-    //   3. The key compiled into this binary at release time
-    //      (brew distribution ships a bundled key; source checkouts
-    //      and CI builds don't have one — see EmbeddedKey.swift).
-    // Without any of these, avatar mode runs unmetered (the auth
-    // service permits this for development) but live cost / balance
-    // feedback won't surface.
+    // Without either, avatar mode runs unmetered (the auth service
+    // permits this for development) but live cost / balance feedback
+    // won't surface.
     let bhSource: String?
     if !(ProcessInfo.processInfo.environment["BITHUMAN_API_KEY"] ?? "").isEmpty {
         bhSource = "env"
@@ -2421,8 +2416,6 @@ func runDoctor() {
         encoding: .utf8),
         !saved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         bhSource = "key file"
-    } else if BithumanEmbeddedKey.value != nil {
-        bhSource = "bundled with brew distribution"
     } else {
         bhSource = nil
     }
@@ -2528,7 +2521,27 @@ func runDoctor() {
 
     print("")
     if archOK && ramOK && diskOK {
-        print("    All checks passed. You're good to run `bithuman-cli voice` or `video`.\n")
+        print("    All checks passed. Try one of:")
+        print("")
+        print("      bithuman-cli text           # type to chat")
+        print("      bithuman-cli voice          # speak to chat (mic + speakers)")
+        print("      bithuman-cli avatar         # voice + animated face — Coach Mason by default")
+        print("")
+        print("    Common flags:")
+        print("      --identity <agent.imx>      # any agent .imx (Expression or Essence)")
+        print("      --image <path-or-preset>    # Expression with custom portrait")
+        print("      --prompt 'be a pirate'      # override system prompt")
+        print("      --voice <name|path>         # preset name, or audio path to clone (voice mode)")
+        print("      --openai / --local          # force cloud or on-device backend")
+        print("")
+        if bhSource == nil {
+            print("    Avatar mode runs unmetered without a bitHuman API key. To enable")
+            print("    live billing + balance feedback, grab a key at")
+            print("    https://www.bithuman.ai/#developer and either:")
+            print("      export BITHUMAN_API_KEY=...")
+            print("      # or save it to ~/Library/Application Support/com.bithuman.cli/bithuman-api-key (mode 0600)")
+            print("")
+        }
     } else {
         print("    Some checks didn't pass — see notes above.\n")
     }
