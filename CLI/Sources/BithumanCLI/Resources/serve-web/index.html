@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>bitHuman</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- LiveKit Web SDK v2 dropped the .umd.min.js variant; the
+         current UMD bundle is livekit-client.umd.js (~520 KB,
+         self-minified). Exposes globalThis.LivekitClient (lowercase k). -->
+    <script src="https://unpkg.com/livekit-client@2/dist/livekit-client.umd.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="wordmark">bit<span class="wordmark-accent">Human</span></div>
+      <div class="room-name" id="roomName">__ROOM_NAME__</div>
+    </header>
+
+    <main class="app-main">
+      <section class="stage" aria-label="avatar stage">
+        <video
+          id="avatarVideo"
+          class="avatar-video"
+          autoplay
+          playsinline
+          muted
+        ></video>
+        <audio id="botAudio" autoplay></audio>
+        <div class="stage-overlay" id="stageOverlay">
+          <div class="overlay-title">Ready when you are</div>
+          <div class="overlay-sub">Click Connect and allow microphone access.</div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="status-row">
+          <span class="status-pill" id="statusPill" data-state="idle">
+            <span class="status-dot"></span>
+            <span class="status-label" id="statusLabel">Disconnected</span>
+          </span>
+        </div>
+
+        <div class="button-row">
+          <button id="connectBtn" class="btn btn-primary">Connect</button>
+          <button id="muteBtn" class="btn btn-secondary" disabled>Mute</button>
+          <button id="disconnectBtn" class="btn btn-secondary" disabled>
+            Disconnect
+          </button>
+        </div>
+
+        <div class="log-line" id="logLine" role="status" aria-live="polite"></div>
+        <div class="error-line" id="errorLine" role="alert"></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">Powered by bitHuman</footer>
+
+    <script>
+      window.__BITHUMAN_CONFIG__ = {
+        livekitUrl: "__LIVEKIT_URL__",
+        livekitToken: "__LIVEKIT_TOKEN__",
+        roomName: "__ROOM_NAME__",
+      };
+    </script>
+    <script src="client.js"></script>
+  </body>
+</html>
