@@ -2448,19 +2448,81 @@ func runDoctor() {
     func row(_ icon: String, _ label: String, _ note: String) {
         print("    \(icon) \(label)\(note.isEmpty ? "" : "  — \(note)")")
     }
-    row(onDeviceOK ? "✓" : "✗", "Avatar Essence (local):     ",
-        onDeviceOK ? "any Apple Silicon, ~118 MB default agent" : "needs Apple Silicon")
-    row((onDeviceOK && chipGen >= 3) ? "✓" : (onDeviceOK ? "!" : "✗"),
-        "Avatar Expression (local):  ",
-        chipGen >= 3 ? "your chip is supported" : (onDeviceOK ? "M3+ required for sustainable lipsync" : "needs Apple Silicon"))
+
+    // Asset cache probes — cheap fileExists checks against the
+    // canonical locations each downloader writes to. Lets the
+    // capability rows distinguish "✓ ready (cached)" from
+    // "⬇ available, X MB on first run". No network round-trips.
+    let essenceCachedURL = AgentDownloader.defaultCacheDirectory
+        .appendingPathComponent(DefaultEssenceAgent.modelURL.lastPathComponent)
+    let essenceCached = FileManager.default.fileExists(atPath: essenceCachedURL.path)
+    let expressionCached = FileManager.default.fileExists(atPath: ExpressionWeights.localURL.path)
+    // HF cache layout: ~/.cache/huggingface/hub/models--<org>--<name>/.
+    // Existence of the org-name directory is a sufficient signal
+    // for "first download completed" — HF hub never deletes
+    // partial fetches, so a present dir means usable bytes.
+    let hfHub = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".cache/huggingface/hub", isDirectory: true)
+    func hfCached(_ slashedRepo: String) -> Bool {
+        let dirName = "models--" + slashedRepo.replacingOccurrences(of: "/", with: "--")
+        return FileManager.default.fileExists(
+            atPath: hfHub.appendingPathComponent(dirName).path)
+    }
+    let kokoroCached = hfCached("mlx-community/Kokoro-82M-4bit")
+    let qwen3TTSCached = hfCached("mlx-community/Qwen3-TTS-12Hz-0.6B-Base-4bit")
+    let gemma3nCached = hfCached("mlx-community/gemma-3n-E2B-it-4bit")
+    let voiceLocalCached = onDeviceOK && qwen3TTSCached && gemma3nCached
+    let textLocalCached = onDeviceOK && gemma3nCached
+
+    // Avatar Essence
+    if !onDeviceOK {
+        row("✗", "Avatar Essence (local):     ", "needs Apple Silicon")
+    } else if essenceCached {
+        row("✓", "Avatar Essence (local):     ", "ready (Coach Mason cached)")
+    } else {
+        row("⬇", "Avatar Essence (local):     ", "available, ~118 MB on first run")
+    }
+
+    // Avatar Expression
+    if !onDeviceOK {
+        row("✗", "Avatar Expression (local):  ", "needs Apple Silicon")
+    } else if chipGen < 3 {
+        row("!", "Avatar Expression (local):  ", "M3+ required for sustainable lipsync")
+    } else if expressionCached {
+        row("✓", "Avatar Expression (local):  ", "ready (engine cached)")
+    } else {
+        row("⬇", "Avatar Expression (local):  ", "available, ~1.56 GB engine on first run")
+    }
+
+    // Avatar cloud
     row(cloudOpenAIOK ? "✓" : "·", "Avatar (cloud lipsync):     ",
         cloudOpenAIOK ? "OpenAI Realtime + local lipsync tap" : "set OPENAI_API_KEY to enable")
-    row(onDeviceOK ? "✓" : "✗", "Voice (local):              ",
-        onDeviceOK ? "MLX Gemma + Qwen3-TTS, ~5 GB first run" : "needs Apple Silicon")
+
+    // Voice (local) — Gemma 3n + Qwen3-TTS + Kokoro
+    if !onDeviceOK {
+        row("✗", "Voice (local):              ", "needs Apple Silicon")
+    } else if voiceLocalCached && kokoroCached {
+        row("✓", "Voice (local):              ", "ready (LLM + TTS cached)")
+    } else if voiceLocalCached || qwen3TTSCached || kokoroCached || gemma3nCached {
+        row("⬇", "Voice (local):              ", "partially cached, remainder fetched on first run")
+    } else {
+        row("⬇", "Voice (local):              ", "available, ~5 GB on first run")
+    }
+
+    // Voice (cloud)
     row(cloudOpenAIOK ? "✓" : "·", "Voice (cloud):              ",
         cloudOpenAIOK ? "OpenAI Realtime over WebRTC" : "set OPENAI_API_KEY to enable")
-    row(onDeviceOK ? "✓" : "✗", "Text (local):               ",
-        onDeviceOK ? "MLX Gemma 3n E2B 4-bit, ~2 GB" : "needs Apple Silicon")
+
+    // Text (local) — Gemma 3n only
+    if !onDeviceOK {
+        row("✗", "Text (local):               ", "needs Apple Silicon")
+    } else if textLocalCached {
+        row("✓", "Text (local):               ", "ready (Gemma cached)")
+    } else {
+        row("⬇", "Text (local):               ", "available, ~2 GB on first run")
+    }
+
+    // Text (cloud)
     row(cloudOpenAIOK ? "✓" : "·", "Text (cloud):               ",
         cloudOpenAIOK ? "OpenAI Chat Completions" : "set OPENAI_API_KEY to enable")
 
