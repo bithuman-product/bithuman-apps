@@ -9,8 +9,6 @@
 // gates, the cached download inventory, and the resolved key
 // state, so users can sanity-check the host before a long run.
 
-import AVFoundation
-import AppKit
 import Foundation
 import bitHumanKit
 
