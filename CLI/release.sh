@@ -40,6 +40,15 @@ PROFILE="${NOTARY_PROFILE:-bithuman-notary}"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 export SIGNING_IDENTITY="$IDENTITY"
 
+echo "🏷  Stamping the binary with version $VERSION via CLIVersion.swift"
+# Inject for the build only; the trap restores via `git checkout` so
+# the source-controlled state stays at "0.0.0-dev" (so dev `swift run`
+# always reports the dev sentinel, not a stale frozen release tag).
+# Trap covers Ctrl-C / early exits too.
+CLI_VERSION_FILE="Sources/BithumanCLI/CLIVersion.swift"
+sed -i '' "s/^let cliVersion = .*/let cliVersion = \"$VERSION\"/" "$CLI_VERSION_FILE"
+trap 'git checkout -- "$CLI_VERSION_FILE" 2>/dev/null || true' EXIT
+
 echo "🧹 Cleaning DerivedData so we don't ship stale artifacts (e.g. resource"
 echo "   bundles from a prior package/target name)."
 # `-skipMacroValidation` matches build.sh — without it,

@@ -124,7 +124,7 @@ func levenshtein(_ a: String, _ b: String) -> Int {
 let knownFlags: [String] = [
     "--locale", "--voice", "--image", "--model", "--identity",
     "--prompt", "--openai", "--local", "--openai-model",
-    "-h", "--help",
+    "-h", "--help", "-v", "--version",
 ]
 
 /// User's choice when no `OPENAI_API_KEY` was found and they ran
@@ -254,6 +254,9 @@ func parseArgs() -> CLIArgs {
             args.openAIModel = nextValue("--openai-model", &it, hint: FlagHint.openAIModel)
         case "-h", "--help":
             print(helpText)
+            exit(0)
+        case "-v", "--version":
+            print("bithuman-cli \(cliVersion)")
             exit(0)
         default:
             // Typo-suggest off `knownFlags`. Unknown subcommands are
