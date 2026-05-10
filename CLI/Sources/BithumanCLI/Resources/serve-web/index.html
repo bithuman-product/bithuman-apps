@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>bitHuman</title>
     <link rel="stylesheet" href="style.css" />
-    <script src="https://unpkg.com/livekit-client@2/dist/livekit-client.umd.min.js"></script>
+    <!-- LiveKit Web SDK v2 dropped the .umd.min.js variant; the
+         current UMD bundle is livekit-client.umd.js (~520 KB,
+         self-minified). Exposes globalThis.LivekitClient (lowercase k). -->
+    <script src="https://unpkg.com/livekit-client@2/dist/livekit-client.umd.js"></script>
   </head>
   <body>
     <header class="app-header">
