@@ -105,15 +105,14 @@ let helpText = """
                           when a key is set (avatar renders locally
                           via lipsync tap on the WebRTC bot audio
                           track), fully on-device otherwise.
-                          With no `--identity`, the bundled Coach
-                          Mason Essence agent (~118 MB) is auto-
-                          fetched on first run — fastest path to a
-                          working avatar. Pass `--identity <agent.imx>`
-                          for a different Essence agent, or
-                          `--image <portrait>` for a custom-portrait
-                          Expression avatar (~1.56 GB engine). Right-
-                          click the avatar to swap agents, audition
-                          voices, or edit the prompt.
+                          Requires a bitHuman API key (see ENV) and
+                          an `.imx` avatar file. Pass `--identity
+                          <agent.imx>` for any Essence or Expression
+                          bundle, or `--image <portrait>` for a
+                          custom-portrait Expression avatar
+                          (~1.56 GB engine on first run). Right-
+                          click the avatar to audition voices or
+                          edit the prompt.
 
                           (Old name `video` is still accepted as a
                           hidden alias for backward compatibility.)
@@ -1060,15 +1059,14 @@ func runVideoSession(args: CLIArgs) async throws {
     //
     //   1. `--image <portrait>` was supplied — user explicitly wants
     //      a custom-portrait Expression avatar. Stay on Expression
-    //      with the supplied JPG/PNG (existing behavior).
+    //      with the supplied JPG/PNG.
     //
-    //   2. Neither `--image` nor `--model` was supplied — default
-    //      to the bundled Essence agent (Coach Mason, A71DAR6308).
-    //      Essence is the right default: ~118 MB to download +
-    //      warm-boot in ~5 s, vs Expression's ~1.56 GB engine and
-    //      ~60 s first-run compile. Per-agent voice + portrait are
-    //      baked into the .imx so the user gets a complete persona
-    //      out of the box without any flags.
+    //   2. Neither was supplied — there's no Essence auto-default
+    //      right now (the supabase `model_path` field stores raw
+    //      asset tarballs, not runtime-ready packed `.imx` files —
+    //      see DefaultEssenceAgent.swift for the history). Print a
+    //      friendly hint pointing the user at `--identity` instead
+    //      of fetching a known-bad URL.
     if args.imageArg != nil {
         // Case 1 — Expression with custom portrait.
         if args.openAI {
@@ -1079,20 +1077,26 @@ func runVideoSession(args: CLIArgs) async throws {
         return
     }
 
-    // Case 2 — fetch the default Essence agent + dispatch.
-    let defaultURL: URL
-    do {
-        FileHandle.standardError.write(Data(
-            "ℹ️  Defaulting to \(DefaultEssenceAgent.displayName) (\(DefaultEssenceAgent.agentCode)). Pass `--identity <path>` for a different avatar.\n".utf8))
-        defaultURL = try await DefaultEssenceAgent.ensureAvailable(progress: nil)
-    } catch {
-        fatalUsage("default Essence agent download failed: \(error.localizedDescription)")
-    }
-    if args.openAI {
-        try await runEssenceVideoSessionOpenAIWebRTC(args: args, modelPath: defaultURL)
-    } else {
-        try await runEssenceVideoSession(args: args, modelPath: defaultURL)
-    }
+    // Case 2 — no auto-default; print a hint. Surface the known-
+    // good local Essence asset if it's already cached so the user
+    // has a one-line copy-paste path to a working session.
+    let cachedSample = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".cache/bithuman/models/sample-avatar.imx")
+    let sampleHint = FileManager.default.fileExists(atPath: cachedSample.path)
+        ? "  Try:  bithuman-cli avatar --identity \(cachedSample.path)\n"
+        : ""
+    let msg = """
+
+    error: avatar mode needs an `.imx` file — pass `--identity <path>`.
+
+      bithuman-cli avatar --identity ~/path/to/agent.imx     # Expression or Essence
+      bithuman-cli avatar --image    ~/me.jpg                # Expression w/ your portrait
+    \(sampleHint)
+    Get an `.imx` from your bitHuman dashboard at https://www.bithuman.ai
+
+    """
+    FileHandle.standardError.write(Data(msg.utf8))
+    exit(2)
 }
 
 /// Essence-mode video session. Boots a `VoiceChat` WITHOUT
@@ -2527,9 +2531,16 @@ func runDoctor() {
     // canonical locations each downloader writes to. Lets the
     // capability rows distinguish "✓ ready (cached)" from
     // "⬇ available, X MB on first run". No network round-trips.
-    let essenceCachedURL = AgentDownloader.defaultCacheDirectory
-        .appendingPathComponent(DefaultEssenceAgent.modelURL.lastPathComponent)
-    let essenceCached = FileManager.default.fileExists(atPath: essenceCachedURL.path)
+    //
+    // Essence has no auto-download default (see
+    // DefaultEssenceAgent.swift for the history) — the user has to
+    // bring their own `.imx`. Cache probe falls back to
+    // `~/.cache/bithuman/models/sample-avatar.imx`, the well-known
+    // local sample, so the row reflects whether at least *something*
+    // is loadable today.
+    let sampleEssenceURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".cache/bithuman/models/sample-avatar.imx")
+    let essenceCached = FileManager.default.fileExists(atPath: sampleEssenceURL.path)
     let expressionCached = FileManager.default.fileExists(atPath: ExpressionWeights.localURL.path)
     // HF cache layout: ~/.cache/huggingface/hub/models--<org>--<name>/.
     // Existence of the org-name directory is a sufficient signal
@@ -2552,9 +2563,9 @@ func runDoctor() {
     if !onDeviceOK {
         row("✗", "Avatar Essence (local):     ", "needs Apple Silicon")
     } else if essenceCached {
-        row("✓", "Avatar Essence (local):     ", "ready (Coach Mason cached)")
+        row("✓", "Avatar Essence (local):     ", "ready — try: bithuman-cli avatar --identity ~/.cache/bithuman/models/sample-avatar.imx")
     } else {
-        row("⬇", "Avatar Essence (local):     ", "available, ~118 MB on first run")
+        row("·", "Avatar Essence (local):     ", "needs --identity <agent.imx>; download one from your bitHuman dashboard")
     }
 
     // Avatar Expression
