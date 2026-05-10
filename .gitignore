@@ -4,8 +4,7 @@
 xcuserdata/
 DerivedData/
 # xcodegen-generated artifacts — regenerate via project.yml
-*.xcodeproj/xcuserdata/
-*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/
 iPad/App/Generated/
 iPhone/App/Generated/
 iPad/App/build/
