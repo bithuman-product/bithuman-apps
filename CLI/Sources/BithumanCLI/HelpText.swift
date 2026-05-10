@@ -180,12 +180,30 @@ let helpText = """
                          Pass either `--identity`, `--image`, or
                          `--model` — not multiple.
 
-  --openai-model <id>    Cloud model id. Defaults differ by mode:
-                         voice → `gpt-realtime-mini`
-                         text  → `gpt-4o-mini`
-                         Pass any compatible model name to override.
+  --openai-model <id>    Cloud model id. Same flag for every mode;
+                         eligible models differ because voice/avatar
+                         use the Realtime API while text uses Chat
+                         Completions:
+
+                         voice / avatar (Realtime):
+                           default: gpt-realtime-mini
+                           also:    gpt-realtime
+                           full:    https://platform.openai.com/docs/guides/realtime
+
+                         text (Chat Completions):
+                           default: gpt-4o-mini
+                           also:    gpt-4o, gpt-4.1-mini, gpt-4.1, o4-mini
+                           full:    https://platform.openai.com/docs/models
+
+                         text-mode safety net: if you accidentally
+                         pass a Realtime id to `text --openai`, the
+                         CLI substitutes the chat default. The
+                         reverse (chat id in voice/avatar) hits the
+                         Realtime API as-is — match the mode or
+                         OpenAI will 4xx.
 
   -h, --help             Show this help and exit.
+  -v, --version          Print the bithuman-cli version and exit.
 
 \u{1B}[1mCONTROLS\u{1B}[0m (voice / video)
   Talk:        just speak after you see "🎙️  Listening".
