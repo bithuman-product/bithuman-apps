@@ -16,7 +16,6 @@
 
 import AppKit
 import Foundation
-import Speech
 import bitHumanKit
 
 @MainActor

@@ -18,7 +18,6 @@ import AVFoundation
 import Foundation
 import bitHumanKit
 import BithumanRealtimeOpenAI
-import Speech
 
 func runVideoSession(args: CLIArgs) async throws {
     if let hint = videoHardwareHint(args: args) {
