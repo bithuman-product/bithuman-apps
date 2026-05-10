@@ -270,13 +270,114 @@ let helpText = """
 
 // MARK: - Argv parsing
 
-private func nextValue(_ flag: String, _ it: inout IndexingIterator<[String]>) -> String {
-    guard let v = it.next() else { fatalUsage("\(flag) needs a value") }
+/// Per-flag hint strings for the "needs a value" error path. Each
+/// hint is rendered as the second line of the error so the user
+/// sees both *what* failed and *what to type instead* without
+/// having to re-run with `--help`. Hints are produced lazily so
+/// they can pull live preset lists from the SDK.
+private enum FlagHint {
+    static let locale = "Examples: en-US (default), ja-JP, zh-CN, es-ES, fr-FR. Any BCP-47 code."
+
+    /// `--voice` accepts different value shapes per mode/backend.
+    /// Surface all three so a user who hit Tab in the wrong mode
+    /// still gets a list they can copy from.
+    static var voice: String {
+        let qwen3 = VoiceSelection.presetNames.joined(separator: ", ")
+        let kokoro = VoiceChat.availableAvatarVoices.joined(separator: ", ")
+        return """
+            voice --local (Qwen3, cloning supported): \(qwen3)
+                            or path to 10-20 s mono audio (.wav / .aiff / .m4a)
+              avatar (Kokoro, presets only):           \(kokoro)
+              voice --openai (Realtime):               alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
+            """
+    }
+
+    static let image = "Bundled preset (Alice, Marco, Captain, Nia, Riley) or a path to a portrait JPG/PNG/HEIC."
+    static let model = "Path to an .imx avatar bundle. Get one at https://www.bithuman.ai/#explore (Download menu)."
+    static let identity = "Image preset, image file path (.jpg/.png/.heic), or .imx model path. Auto-dispatched by file shape."
+    static let prompt = """
+        Inline string: --prompt "You are a helpful assistant."
+          File path:     --prompt @/path/to/prompt.txt
+        """
+    static let openAIModel = "OpenAI Realtime model id, e.g. gpt-realtime-mini (default), gpt-realtime."
+}
+
+/// Pull the next positional value off the arg iterator for the
+/// given flag. On a missing or flag-shaped value, call `fatalUsage`
+/// with a per-flag hint so the user sees the valid value shapes
+/// without having to consult `--help`.
+private func nextValue(
+    _ flag: String,
+    _ it: inout IndexingIterator<[String]>,
+    hint: String? = nil
+) -> String {
+    guard let v = it.next() else {
+        if let hint = hint {
+            fatalUsage("\(flag) needs a value.\n  \(hint)")
+        }
+        fatalUsage("\(flag) needs a value")
+    }
     if v.hasPrefix("-") {
+        // The user wrote `--flag --otherflag` — almost always an
+        // accidentally dropped value. Show the hint so they can fill
+        // it in instead of re-reading the help.
+        if let hint = hint {
+            fatalUsage("""
+                \(flag) needs a value but got the flag '\(v)'. Did you forget the argument?
+                  \(hint)
+                """)
+        }
         fatalUsage("\(flag) needs a value but got the flag '\(v)'. Did you forget the argument?")
     }
     return v
 }
+
+/// Cheap typo-suggester used by the unknown-argument error path. Returns
+/// the closest match from `candidates` if its Levenshtein distance is
+/// within `tolerance`, otherwise nil. Tolerance scales with input length
+/// so short flags need an exact-or-one-char-off match while longer ones
+/// allow a couple of edits.
+internal func closestMatch(_ input: String, in candidates: [String]) -> String? {
+    let lower = input.lowercased()
+    let tolerance = max(2, lower.count / 4)
+    var best: (String, Int)? = nil
+    for candidate in candidates {
+        let d = levenshtein(lower, candidate.lowercased())
+        if d <= tolerance, best.map({ d < $0.1 }) ?? true {
+            best = (candidate, d)
+        }
+    }
+    return best?.0
+}
+
+/// Iterative DP Levenshtein. Plenty fast for argv-sized inputs; we
+/// don't need the early-exit optimisation here.
+private func levenshtein(_ a: String, _ b: String) -> Int {
+    let aChars = Array(a)
+    let bChars = Array(b)
+    if aChars.isEmpty { return bChars.count }
+    if bChars.isEmpty { return aChars.count }
+    var prev = Array(0...bChars.count)
+    var curr = Array(repeating: 0, count: bChars.count + 1)
+    for i in 1...aChars.count {
+        curr[0] = i
+        for j in 1...bChars.count {
+            let cost = aChars[i - 1] == bChars[j - 1] ? 0 : 1
+            curr[j] = min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        }
+        swap(&prev, &curr)
+    }
+    return prev[bChars.count]
+}
+
+/// All recognised flags. Single source of truth used by the parser
+/// and the unknown-argument typo suggester. Keep in sync with the
+/// switch in `parseArgs`.
+private let knownFlags: [String] = [
+    "--locale", "--voice", "--image", "--model", "--identity",
+    "--prompt", "--openai", "--local", "--openai-model",
+    "-h", "--help",
+]
 
 /// User's choice when no `OPENAI_API_KEY` was found and they ran
 /// `bithuman-cli voice` in an interactive terminal. The exit case
@@ -380,29 +481,49 @@ func parseArgs() -> CLIArgs {
     while let arg = it.next() {
         switch arg {
         case "--locale":
-            args.localeIdentifier = nextValue("--locale", &it)
+            args.localeIdentifier = nextValue("--locale", &it, hint: FlagHint.locale)
         case "--voice":
-            args.voiceArg = nextValue("--voice", &it)
+            args.voiceArg = nextValue("--voice", &it, hint: FlagHint.voice)
         case "--image":
-            args.imageArg = nextValue("--image", &it)
+            args.imageArg = nextValue("--image", &it, hint: FlagHint.image)
         case "--model":
-            args.modelArg = nextValue("--model", &it)
+            args.modelArg = nextValue("--model", &it, hint: FlagHint.model)
         case "--identity":
-            args.identityArg = nextValue("--identity", &it)
+            args.identityArg = nextValue("--identity", &it, hint: FlagHint.identity)
         case "--prompt":
-            guard let v = it.next() else { fatalUsage("--prompt needs a string or @path") }
+            // --prompt accepts inline strings starting with '-' (e.g. an
+            // imperative sentence), so we can't gate on the prefix here.
+            // The only failure mode is a truly missing value.
+            guard let v = it.next() else {
+                fatalUsage("--prompt needs a value.\n  \(FlagHint.prompt)")
+            }
             args.promptArg = v
         case "--openai":
             args.openAI = true
         case "--local":
             args.local = true
         case "--openai-model":
-            args.openAIModel = nextValue("--openai-model", &it)
+            args.openAIModel = nextValue("--openai-model", &it, hint: FlagHint.openAIModel)
         case "-h", "--help":
             print(helpText)
             exit(0)
         default:
-            fatalUsage("unknown argument '\(arg)'")
+            // Typo-suggest off `knownFlags`. Unknown subcommands are
+            // already caught earlier (line 372); only flag-shaped
+            // unknowns reach here, so suggesting flags is the right
+            // default. For non-flag tokens we still list the flag set
+            // because that's the only thing this loop accepts.
+            if let suggestion = closestMatch(arg, in: knownFlags) {
+                fatalUsage("""
+                    unknown argument '\(arg)'.
+                      Did you mean '\(suggestion)'?
+                      All flags: \(knownFlags.joined(separator: ", "))
+                    """)
+            }
+            fatalUsage("""
+                unknown argument '\(arg)'.
+                  All flags: \(knownFlags.joined(separator: ", "))
+                """)
         }
     }
 
