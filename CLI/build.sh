@@ -49,6 +49,7 @@ xcodebuild \
   -destination 'platform=macOS,arch=arm64' \
   -configuration "$CONFIG" \
   -skipMacroValidation \
+  OTHER_LDFLAGS='$(inherited) -Wl,-headerpad_max_install_names' \
   build > /tmp/bithuman-cli.build.log 2>&1
 tail -5 /tmp/bithuman-cli.build.log
 
