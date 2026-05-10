@@ -137,6 +137,27 @@ for fw in "$stage"/*.framework; do
   xcrun stapler staple "$fw" 2>/dev/null || true
 done
 
+# Zip every .framework before the outer archive is built. Why:
+# Homebrew's `fix_install_linkage` walks every Mach-O in a keg and
+# tries to rewrite each dylib's LC_ID_DYLIB to an absolute install
+# path. Upstream third-party frameworks (notably libwebrtc, shipped
+# via livekit/webrtc-xcframework) were linked WITHOUT
+# `-Wl,-headerpad_max_install_names`, so their Mach-O headers don't
+# reserve enough room for the longer absolute path brew wants —
+# the rewrite fails with "Updated load commands do not fit in the
+# header" and brew emits a confusing (but cosmetic) warning.
+#
+# Workaround: ship each framework inside a zip. Brew sees `.zip`,
+# not Mach-O, so `fix_install_linkage` skips it. The formula's
+# `post_install` block extracts the framework back into place after
+# relocation runs — same files on disk at runtime, identical
+# `@rpath` resolution, no warning.
+for fw in "$stage"/*.framework; do
+  [ -d "$fw" ] || continue
+  fw_name=$(basename "$fw")
+  ( cd "$stage" && ditto -c -k --keepParent "$fw_name" "$fw_name.zip" && rm -rf "$fw_name" )
+done
+
 # Re-zip after stapling so the distributed archive contains the
 # embedded tickets.
 rm -f "$out"
