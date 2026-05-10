@@ -18,12 +18,6 @@ enum Mode: String {
     /// the parser as a hidden alias so existing scripts / shell
     /// history don't break. Internal code still calls it `.avatar`.
     case avatar
-    /// `serve` — local "production-shape" stack for browser-based
-    /// avatar chat. Spawns livekit-server (dev mode) + essence-server +
-    /// the in-process BithumanLiveKitBridge (Swift agent-worker) +
-    /// a Hummingbird HTTP server with a static web client at :8090.
-    /// User opens the browser, talks, sees the avatar reply.
-    case serve
     case cleanup
     case doctor
 }
@@ -68,11 +62,6 @@ struct CLIArgs {
     var openAI: Bool = false
     var local: Bool = false
     var openAIModel: String = "gpt-realtime-mini"
-
-    // serve mode only
-    var servePort: Int = 8090
-    var serveLivekitPort: Int = 7880
-    var serveOpenBrowser: Bool = true
 }
 
 // MARK: - Help
@@ -409,20 +398,6 @@ func parseArgs() -> CLIArgs {
             args.local = true
         case "--openai-model":
             args.openAIModel = nextValue("--openai-model", &it)
-        case "--port":
-            let v = nextValue("--port", &it)
-            guard let n = Int(v), n > 0, n < 65_536 else {
-                fatalUsage("--port: '\(v)' isn't a valid port number.")
-            }
-            args.servePort = n
-        case "--livekit-port":
-            let v = nextValue("--livekit-port", &it)
-            guard let n = Int(v), n > 0, n < 65_536 else {
-                fatalUsage("--livekit-port: '\(v)' isn't a valid port number.")
-            }
-            args.serveLivekitPort = n
-        case "--no-open":
-            args.serveOpenBrowser = false
         case "-h", "--help":
             print(helpText)
             exit(0)
@@ -604,18 +579,6 @@ func parseArgs() -> CLIArgs {
                       Recognised: \(VoiceChat.availableAvatarVoices.joined(separator: ", "))
                     """)
             }
-        }
-    case .serve:
-        // serve runs the local production-shape stack: livekit-server +
-        // essence-server + in-process BithumanLiveKitBridge + Hummingbird
-        // HTTP server. The brain is OpenAI Realtime via WS so a key is
-        // required. The avatar identity comes from --identity (we won't
-        // auto-fetch a default; same constraint as `avatar`).
-        if args.local {
-            warn("--local is ignored in serve mode (the brain is always OpenAI Realtime).")
-        }
-        if args.modelArg == nil {
-            fatalUsage("`serve` requires --identity <agent.imx>. Pick one from your bitHuman dashboard at https://www.bithuman.ai")
         }
     case .cleanup, .doctor:
         // Pure utility modes — flag args don't apply. Warn rather
@@ -2831,27 +2794,6 @@ MainActor.assumeIsolated {
         runDoctor()
         exit(0)
 
-    case .serve:
-        let args = cliArgs
-        Task { @MainActor in
-            do {
-                let serveArgs = ServeArgs(
-                    port: args.servePort,
-                    livekitPort: args.serveLivekitPort,
-                    openaiModel: args.openAIModel,
-                    openaiVoice: args.voiceArg ?? DefaultEssenceAgent.realtimeVoice,
-                    identityPath: args.modelArg,
-                    promptOverride: args.promptArg,
-                    openBrowser: args.serveOpenBrowser
-                )
-                try await runServeMode(args: serveArgs)
-                exit(0)
-            } catch {
-                FileHandle.standardError.write(Data("\nerror: \(error.localizedDescription)\n".utf8))
-                exit(1)
-            }
-        }
-
     case .text, .voice:
         let args = cliArgs
         Task { @MainActor in
@@ -2859,7 +2801,7 @@ MainActor.assumeIsolated {
                 switch args.mode {
                 case .text:  try await bootstrapText(args)
                 case .voice: try await bootstrapVoice(args)
-                case .avatar, .cleanup, .doctor, .serve: break  // unreachable
+                case .avatar, .cleanup, .doctor: break  // unreachable
                 }
                 exit(0)
             } catch {
