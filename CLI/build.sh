@@ -22,37 +22,11 @@ if [[ "$CONFIG" == "Debug" ]]; then
   echo "" >&2
 fi
 
-# Inject the bundled bitHuman API key into BithumanCLI/EmbeddedKey.swift
-# before the build, so the compiled binary carries the key as a string
-# literal. Resolution priority:
-#   1. $BITHUMAN_BUNDLED_API_KEY env (release pipelines)
-#   2. ~/.bithuman/embedded-key (maintainer's local stash, mode 600)
-#   3. Skip — placeholder stays in source, binary has no embedded key.
-# Builds with no key (the open-source dev path) still work; CLI users
-# in that case must export BITHUMAN_API_KEY at runtime to use the
-# avatar engine. After the xcodebuild run, the placeholder is restored
-# unconditionally so the working tree is clean.
-EMBEDDED_KEY_FILE="Sources/BithumanCLI/EmbeddedKey.swift"
-PLACEHOLDER='__BITHUMAN_EMBEDDED_KEY__'
-INJECT_KEY=""
-if [[ -n "${BITHUMAN_BUNDLED_API_KEY:-}" ]]; then
-  INJECT_KEY="$BITHUMAN_BUNDLED_API_KEY"
-elif [[ -f "$HOME/.bithuman/embedded-key" ]]; then
-  INJECT_KEY="$(cat "$HOME/.bithuman/embedded-key")"
-fi
-restore_embedded_key() {
-  if [[ -n "$INJECT_KEY" ]]; then
-    sed -i '' "s|\"$INJECT_KEY\"|\"$PLACEHOLDER\"|" "$EMBEDDED_KEY_FILE"
-  fi
-}
-if [[ -n "$INJECT_KEY" ]]; then
-  echo "🔐 Injecting bundled API key into $EMBEDDED_KEY_FILE"
-  trap restore_embedded_key EXIT
-  sed -i '' "s|\"$PLACEHOLDER\"|\"$INJECT_KEY\"|" "$EMBEDDED_KEY_FILE"
-else
-  echo "ℹ️  No bundled key found ($BITHUMAN_BUNDLED_API_KEY env or ~/.bithuman/embedded-key)."
-  echo "   Built CLI will require the user to export BITHUMAN_API_KEY at runtime."
-fi
+# (Removed: previous bundled-key injection step. Hard-coding the
+# bitHuman API key into the Mach-O binary made it discoverable via
+# `strings`, which is the wrong shape for a credential. The CLI now
+# resolves the key only from environment + on-disk file at runtime;
+# users without one fall through to dev-mode unmetered avatar.)
 
 # Resolve SwiftPM dependencies first so the WebRTC xcframework is
 # extracted into DerivedData's SourcePackages/artifacts cache. Then

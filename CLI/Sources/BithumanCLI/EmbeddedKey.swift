@@ -1,54 +1,25 @@
-// Build-time-substituted bitHuman API key for the bundled CLI
-// distribution. The literal `__BITHUMAN_EMBEDDED_KEY__` below is a
-// placeholder; `release.sh` rewrites it with the actual key just
-// before signing + notarising the binary, then restores the
-// placeholder afterwards. This way:
+// Retired 2026-05-09. The CLI used to inject the bitHuman API key
+// into this file at release time so the brew-distributed binary
+// carried the key as a Mach-O string literal accessible without any
+// user configuration. That convenience came at the cost of credential
+// exposure — `strings bithuman-cli` revealed the key — which is the
+// wrong shape for a credential that's meant to scope per-account
+// metering.
 //
-//   - The committed source contains no real secret. `git log`,
-//     `gh repo view`, and any source-code search return only the
-//     placeholder.
-//   - The compiled binary that ships in the Homebrew tap / DMG has
-//     the key hard-coded as a string literal — accessible to
-//     `bithuman-cli` at runtime without any user configuration.
-//   - End users running the CLI never see the key (it's bytes in
-//     the Mach-O binary; `strings` reveals it but no normal user
-//     workflow exposes it).
+// The CLI now resolves the bitHuman API key from environment variable
+// or 0600 file at `~/Library/Application Support/com.bithuman.cli/
+// bithuman-api-key` (parallel to the OpenAI key). Users without one
+// fall through to dev-mode unmetered avatar — the auth service
+// permits this — and `bithuman-cli doctor` points them at the signup
+// URL when no key is found.
 //
-// Developers integrating bitHumanKit into their own apps need
-// their own key — they can't reuse the bundled one because they
-// don't have the binary build pipeline that injects it.
-//
-// The `internal` visibility keeps this constant invisible to SDK
-// consumers: only the BithumanCLI target (this file's owner) can
-// reference it.
-internal enum BithumanEmbeddedKey {
+// The struct here is intentionally hollow + permanent. Its `value`
+// always returns nil, regardless of build mode. Kept around so any
+// historical reference (defensive — none in-tree today) still
+// compiles, with a deprecation marker so new code doesn't reach for
+// it.
 
-    /// The substituted key, or nil if the placeholder is still in
-    /// place (development builds, source checkouts, CI without the
-    /// release secret). Callers fall back to `BITHUMAN_API_KEY`
-    /// env vars or whatever else they configure when this is nil.
-    ///
-    /// The placeholder check uses `hasPrefix` against a substring
-    /// of the placeholder rather than full-string equality. This
-    /// matters because the build script's sed pattern targets the
-    /// exact quoted literal `"__BITHUMAN_EMBEDDED_KEY__"`, so a
-    /// `==` check would also be rewritten. `hasPrefix` checks an
-    /// unquoted prefix — sed leaves it untouched — and reliably
-    /// distinguishes a real key (which won't start with the
-    /// `__BITHUMAN_` namespace) from the placeholder.
-    ///
-    /// `@inline(never)` keeps the Swift optimizer from inlining
-    /// the constant string into the (single) call site and then
-    /// DCE'ing the symbol — observed on the SwiftUI Mac target
-    /// where the resulting binary had no trace of the key. The
-    /// CLI happens to survive inlining today, but the attribute
-    /// is cheap insurance against the optimizer changing its mind.
-    @inline(never)
-    internal static var value: String? {
-        let bundled = "__BITHUMAN_EMBEDDED_KEY__"
-        if bundled.isEmpty || bundled.hasPrefix("__BITHUMAN_") {
-            return nil
-        }
-        return bundled
-    }
+internal enum BithumanEmbeddedKey {
+    @available(*, deprecated, message: "Embedded keys retired in 0.16.0; resolve via env/file via BithumanKey.load() instead.")
+    internal static var value: String? { nil }
 }
