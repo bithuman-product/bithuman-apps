@@ -51,7 +51,11 @@ func runCleanup() {
     print("    Delete these directories? [y/N] ", terminator: "")
     let answer = (readLine() ?? "").trimmingCharacters(in: .whitespaces).lowercased()
     if answer != "y" && answer != "yes" {
-        print("    aborted.\n")
+        // Leading \n covers the non-TTY case (piped stdin) where the
+        // user's response doesn't echo + advance the cursor; without
+        // it, "aborted." renders on the same line as the prompt.
+        // In TTY mode a blank line before "aborted." is fine.
+        print("\n    aborted.\n")
         return
     }
     for (path, _) in present {
@@ -74,22 +78,30 @@ func runCleanup() {
 func runDoctor() {
     print("\n  bithuman-cli doctor — host capability check\n")
 
+    // Pad the label to a fixed width so values column-align across
+    // every host-info row. Width 19 fits the longest label
+    // ("CPU architecture" and "bitHuman API key" — both 16 chars +
+    // ":" + 2 spaces of breathing room).
+    func label(_ text: String) -> String {
+        "\(text):".padding(toLength: 19, withPad: " ", startingAt: 0)
+    }
+
     let arch = currentArch()
     let archOK = (arch == "arm64")
-    print("    \(archOK ? "✓" : "✗") CPU architecture: \(arch)\(archOK ? "" : "  (Apple Silicon required)")")
+    print("    \(archOK ? "✓" : "✗") \(label("CPU architecture"))\(arch)\(archOK ? "" : "  (Apple Silicon required)")")
 
     let osVer = ProcessInfo.processInfo.operatingSystemVersionString
-    print("    ✓ macOS:           \(osVer)")
+    print("    ✓ \(label("macOS"))\(osVer)")
 
     let ramGB = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
     let ramOK = ramGB >= 16
-    print("    \(ramOK ? "✓" : "!") RAM:             \(String(format: "%.1f GB", ramGB))\(ramOK ? "" : "  (16 GB recommended for video mode)")")
+    print("    \(ramOK ? "✓" : "!") \(label("RAM"))\(String(format: "%.1f GB", ramGB))\(ramOK ? "" : "  (16 GB recommended for video mode)")")
 
     let home = NSString(string: "~").expandingTildeInPath
     let freeBytes = freeDiskSpace(home)
     let freeGB = Double(freeBytes) / 1_073_741_824
     let diskOK = freeGB >= 10
-    print("    \(diskOK ? "✓" : "!") Free disk:       \(String(format: "%.1f GB", freeGB))\(diskOK ? "" : "  (need ~10 GB for cold start)")")
+    print("    \(diskOK ? "✓" : "!") \(label("Free disk"))\(String(format: "%.1f GB", freeGB))\(diskOK ? "" : "  (need ~10 GB for cold start)")")
 
     // OpenAI key — used by `--openai` cloud paths for text/voice/avatar.
     let openaiSource: String?
@@ -100,7 +112,7 @@ func runDoctor() {
     } else {
         openaiSource = nil
     }
-    print("    \(openaiSource != nil ? "✓" : "·") OpenAI API key:  \(openaiSource.map { "available (\($0))" } ?? "not set — voice/avatar/text will use --local")")
+    print("    \(openaiSource != nil ? "✓" : "·") \(label("OpenAI API key"))\(openaiSource.map { "available (\($0))" } ?? "not set — voice/avatar/text will use --local")")
 
     // bitHuman key — used by avatar (Expression + Essence) for the
     // per-minute billing heartbeat to api.bithuman.ai. Sources, in
@@ -122,7 +134,7 @@ func runDoctor() {
     } else {
         bhSource = nil
     }
-    print("    \(bhSource != nil ? "✓" : "✗") bitHuman API key: \(bhSource.map { "available (\($0))" } ?? "not set — REQUIRED for avatar mode. Get one at https://www.bithuman.ai/#developer")")
+    print("    \(bhSource != nil ? "✓" : "✗") \(label("bitHuman API key"))\(bhSource.map { "available (\($0))" } ?? "not set — REQUIRED for avatar mode. Get one at https://www.bithuman.ai/#developer")")
 
     // Capability matrix — quickly resolve which modes / models the
     // host can actually run, so the user doesn't discover a hardware
