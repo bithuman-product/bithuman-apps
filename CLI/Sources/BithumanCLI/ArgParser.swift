@@ -101,22 +101,31 @@ enum FlagHint {
     /// split by API — Realtime for voice/avatar (streaming
     /// audio in/out over WebRTC), Chat Completions for text. The
     /// box-drawing table makes the two families scannable at a
-    /// glance. Total width 61 chars; fits 80-col terminals with room
-    /// to spare.
+    /// glance. `★` marks the cost-optimised default per mode.
+    ///
+    /// Pricing snapshot below is May 2026 (per 1M tokens). Defaults
+    /// minimise spend while staying on currently-supported
+    /// (non-legacy) models. Power users can override with any model
+    /// their OpenAI account has access to.
     static let openAIModel = """
-        The OpenAI model. Eligible names split by mode:
+        The OpenAI model.  \(B)★\(R) = cost-optimised default for the mode.
 
           ┌────────────────┬──────────────────────────────────────────┐
-          │ Mode           │ Eligible models                          │
+          │ Mode           │ Model                  $in   /  $out 1M │
           ├────────────────┼──────────────────────────────────────────┤
-          │ voice / avatar │ \(B)gpt-realtime-mini\(R) \(D)(default)\(R)              │
-          │ (Realtime API) │ gpt-realtime                             │
+          │ voice / avatar │ \(B)★\(R) gpt-realtime-1.5     $4    /  $16    │
+          │ (Realtime API) │   gpt-realtime-2       $32   /  $64    │
           ├────────────────┼──────────────────────────────────────────┤
-          │ text           │ \(B)gpt-4o-mini\(R) \(D)(default)\(R)                    │
-          │ (Chat API)     │ gpt-4o, gpt-4.1-mini, gpt-4.1, o4-mini   │
+          │ text           │ \(B)★\(R) gpt-5.4-mini         $0.75 /  $4.50  │
+          │ (Chat API)     │   gpt-5.4-nano         $0.20 /  $1.25  │
+          │                │   gpt-5.4              $2.50 /  $15    │
+          │                │   gpt-5.5              $5    /  $30    │
+          │                │   o3-mini              \(D)(reasoning model)\(R)  │
           └────────────────┴──────────────────────────────────────────┘
 
-          Any model your OpenAI account has access to works.
+          \(D)Legacy (still in API since 2026-02-13 ChatGPT retirement,
+          will be deprecated):\(R) gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, o4-mini.
+
           Full list · \(B)https://platform.openai.com/docs/models\(R)
         """
 }

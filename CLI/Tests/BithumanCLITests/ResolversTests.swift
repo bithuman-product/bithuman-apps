@@ -124,6 +124,6 @@ final class ModeTests: XCTestCase {
         XCTAssertNil(args.modelArg)
         XCTAssertFalse(args.openAI)
         XCTAssertFalse(args.local)
-        XCTAssertEqual(args.openAIModel, "gpt-realtime-mini")
+        XCTAssertEqual(args.openAIModel, "gpt-realtime-1.5")
     }
 }

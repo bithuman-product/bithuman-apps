@@ -45,13 +45,20 @@ func bootstrapTextOpenAI(_ args: CLIArgs) async throws {
         exit(1)
     }
     // Reuse `--openai-model` so the model picker is symmetric with
-    // voice. Map the realtime default to a reasonable chat default —
-    // realtime models accept text-only requests but the dedicated
-    // chat models (gpt-4o-mini, gpt-4.1-mini, etc.) are cheaper.
+    // voice. Realtime model ids only work over the WebRTC streaming
+    // endpoint; if the user passes one (or didn't override the CLI's
+    // voice/avatar default), substitute the canonical Chat
+    // Completions workhorse so the request hits the right endpoint.
+    //
+    // `gpt-5.4-mini` is the cost-effective workhorse: $0.75 in /
+    // $4.50 out per 1M tokens — cheaper than gpt-5.4 ($2.50/$15) or
+    // gpt-5.5 ($5/$30) but more capable than gpt-5.4-nano
+    // ($0.20/$1.25, simple-tasks-only). Pre-GPT-5 chat models
+    // (gpt-4o*, gpt-4.1*, o4-mini) still work but are flagged legacy
+    // by OpenAI since Feb 2026.
     let model: String
-    if args.openAIModel == "gpt-realtime-mini" || args.openAIModel.hasPrefix("gpt-realtime") {
-        // User didn't specify a chat model; pick the fast/cheap default.
-        model = "gpt-4o-mini"
+    if args.openAIModel.hasPrefix("gpt-realtime") {
+        model = "gpt-5.4-mini"
     } else {
         model = args.openAIModel
     }

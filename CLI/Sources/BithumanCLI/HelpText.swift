@@ -183,24 +183,31 @@ let helpText = """
   --openai-model <id>    Cloud model id. Same flag for every mode;
                          eligible models differ because voice/avatar
                          use the Realtime API while text uses Chat
-                         Completions:
+                         Completions. ★ marks the cost-optimised
+                         default per mode (May 2026 OpenAI pricing).
 
-                         voice / avatar (Realtime):
-                           default: gpt-realtime-mini
-                           also:    gpt-realtime
-                           full:    https://platform.openai.com/docs/guides/realtime
+                         voice / avatar (Realtime API):
+                           ★ gpt-realtime-1.5   $4   in / $16   out  per 1M tok
+                             gpt-realtime-2     $32  in / $64   out  (newest, GPT-5-class)
 
-                         text (Chat Completions):
-                           default: gpt-4o-mini
-                           also:    gpt-4o, gpt-4.1-mini, gpt-4.1, o4-mini
-                           full:    https://platform.openai.com/docs/models
+                         text (Chat Completions API):
+                           ★ gpt-5.4-mini       $0.75 in / $4.50 out  (workhorse)
+                             gpt-5.4-nano       $0.20 in / $1.25 out  (simple tasks)
+                             gpt-5.4            $2.50 in / $15   out  (frontier)
+                             gpt-5.5            $5    in / $30   out  (newest frontier)
+                             o3-mini                                  (reasoning model)
 
-                         text-mode safety net: if you accidentally
-                         pass a Realtime id to `text --openai`, the
-                         CLI substitutes the chat default. The
-                         reverse (chat id in voice/avatar) hits the
-                         Realtime API as-is — match the mode or
-                         OpenAI will 4xx.
+                         Legacy (still in API; flagged legacy since
+                         OpenAI retired them from ChatGPT 2026-02-13):
+                           gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, o4-mini
+
+                         Full list · https://platform.openai.com/docs/models
+
+                         text-mode safety net: passing a Realtime id
+                         (`gpt-realtime*`) to `text --openai`
+                         substitutes the chat default. The reverse
+                         (chat id in voice/avatar) hits the Realtime
+                         API as-is — match the mode or OpenAI 4xxs.
 
   -h, --help             Show this help and exit.
   -v, --version          Print the bithuman-cli version and exit.
