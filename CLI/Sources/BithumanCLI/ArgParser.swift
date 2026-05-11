@@ -23,41 +23,101 @@ import bitHumanKit
 /// sees both *what* failed and *what to type instead* without
 /// having to re-run with `--help`. Hints are produced lazily so
 /// they can pull live preset lists from the SDK.
+/// ANSI escape helpers used by hint typography. Wrapping them as
+/// `let`s keeps the FlagHint string literals readable — `\u{1B}[1m`
+/// inline at every emphasis would be visual noise. Non-TTY consumers
+/// see the raw escape bytes; that's the same convention `helpText`
+/// uses (we don't gate ANSI on isatty).
+private let B = "\u{1B}[1m"   // bold on
+private let D = "\u{1B}[2m"   // dim on
+private let R = "\u{1B}[0m"   // reset
+
 enum FlagHint {
-    static let locale = "Examples: en-US (default), ja-JP, zh-CN, es-ES, fr-FR. Any BCP-47 code."
+    static let locale = """
+        ASR + TTS language. Any BCP-47 code:
+
+          \(B)en-US\(R) \(D)(default)\(R)  ·  ja-JP  ·  zh-CN  ·  es-ES  ·  fr-FR  ·  …
+        """
 
     /// `--voice` accepts different value shapes per mode/backend.
-    /// Surface all three so a user who hit Tab in the wrong mode
-    /// still gets a list they can copy from.
+    /// Card per backend so the user can scan the right row by mode
+    /// without parsing a wall of comma-separated names. Preset lists
+    /// pull live from the SDK so they can't drift.
     static var voice: String {
         let qwen3 = VoiceSelection.presetNames.joined(separator: ", ")
-        let kokoro = VoiceChat.availableAvatarVoices.joined(separator: ", ")
+        // Long Kokoro list — wrap to a second line manually so it
+        // doesn't blow past 80 cols on a normal terminal.
+        let kokoro = VoiceChat.availableAvatarVoices
+        let kokoroFirst = kokoro.prefix(4).joined(separator: ", ")
+        let kokoroRest = kokoro.dropFirst(4).joined(separator: ", ")
         return """
-            voice --local (Qwen3, cloning supported): \(qwen3)
-                            or path to 10-20 s mono audio (.wav / .aiff / .m4a)
-              avatar (Kokoro, presets only):           \(kokoro)
-              voice --openai (Realtime):               alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar
-            """
+        The TTS voice. Accepted values depend on the active backend:
+
+          \(B)voice --local\(R)   \(D)Qwen3 · cloning supported\(R)
+            presets · \(qwen3)
+            clone   · path to a 10–20 s mono audio file (.wav, .aiff, .m4a)
+
+          \(B)avatar\(R)          \(D)Kokoro · presets only\(R)
+            presets · \(kokoroFirst),
+                      \(kokoroRest)
+
+          \(B)voice --openai\(R)  \(D)OpenAI Realtime API\(R)
+            presets · alloy, ash, ballad, coral, echo, sage,
+                      shimmer, verse, marin, cedar
+        """
     }
 
-    static let image = "Bundled preset (Alice, Marco, Captain, Nia, Riley) or a path to a portrait JPG/PNG/HEIC."
-    static let model = "Path to an .imx avatar bundle. Get one at https://www.bithuman.ai/#explore (Download menu)."
-    static let identity = "Image preset, image file path (.jpg/.png/.heic), or .imx model path. Auto-dispatched by file shape."
-    static let prompt = """
-        Inline string: --prompt "You are a helpful assistant."
-          File path:     --prompt @/path/to/prompt.txt
+    static let image = """
+        The avatar's portrait. Bundled presets:
+
+          \(B)Alice\(R)  ·  \(B)Marco\(R)  ·  \(B)Captain\(R)  ·  \(B)Nia\(R)  ·  \(B)Riley\(R)
+
+          Or a path to a JPG / PNG / HEIC file on disk.
         """
-    /// The flag is shared across modes but the eligible models split
-    /// in two — Realtime API for voice/avatar (one-shot streaming
-    /// audio in/out), Chat Completions API for text. Surfacing both
-    /// rows + a pointer to the canonical list keeps users from
-    /// guessing model names from the OpenAI docs in another tab.
+
+    static let model = """
+        Path to an .imx avatar bundle.
+
+          Download one at \(B)https://www.bithuman.ai/#explore\(R)
+          \(D)(click ⋯ on any agent → Download)\(R)
+        """
+
+    static let identity = """
+        Unified --image / --model. Auto-dispatched by file shape:
+
+          \(B).imx file\(R)    →  loaded as --model (Expression or Essence bundle)
+          \(B)preset name\(R)  →  loaded as --image (Alice, Marco, Captain, Nia, Riley)
+          \(B)image path\(R)   →  loaded as --image (.jpg / .png / .heic)
+        """
+
+    static let prompt = """
+        System prompt for the LLM. Two forms:
+
+          \(B)inline\(R)  ·  --prompt "You are a helpful assistant."
+          \(B)file\(R)    ·  --prompt @/path/to/prompt.txt
+        """
+
+    /// `--openai-model` is shared across modes but eligible names
+    /// split by API — Realtime for voice/avatar (streaming
+    /// audio in/out over WebRTC), Chat Completions for text. The
+    /// box-drawing table makes the two families scannable at a
+    /// glance. Total width 61 chars; fits 80-col terminals with room
+    /// to spare.
     static let openAIModel = """
-        Defaults differ by mode (the flag is shared):
-            voice / avatar (Realtime API): gpt-realtime-mini (default), gpt-realtime
-            text           (Chat API):     gpt-4o-mini (default), gpt-4o, gpt-4.1-mini, gpt-4.1, o4-mini
-          Any model your OpenAI account has access to works. Full list:
-          https://platform.openai.com/docs/models
+        The OpenAI model. Eligible names split by mode:
+
+          ┌────────────────┬──────────────────────────────────────────┐
+          │ Mode           │ Eligible models                          │
+          ├────────────────┼──────────────────────────────────────────┤
+          │ voice / avatar │ \(B)gpt-realtime-mini\(R) \(D)(default)\(R)              │
+          │ (Realtime API) │ gpt-realtime                             │
+          ├────────────────┼──────────────────────────────────────────┤
+          │ text           │ \(B)gpt-4o-mini\(R) \(D)(default)\(R)                    │
+          │ (Chat API)     │ gpt-4o, gpt-4.1-mini, gpt-4.1, o4-mini   │
+          └────────────────┴──────────────────────────────────────────┘
+
+          Any model your OpenAI account has access to works.
+          Full list · \(B)https://platform.openai.com/docs/models\(R)
         """
 }
 
@@ -271,20 +331,32 @@ func parseArgs() -> CLIArgs {
             exit(0)
         default:
             // Typo-suggest off `knownFlags`. Unknown subcommands are
-            // already caught earlier (line 372); only flag-shaped
-            // unknowns reach here, so suggesting flags is the right
-            // default. For non-flag tokens we still list the flag set
-            // because that's the only thing this loop accepts.
+            // already caught earlier; only flag-shaped unknowns reach
+            // here, so suggesting flags is the right default. The
+            // categorised list (Value / Boolean / Info) makes the
+            // valid-flag dump scannable rather than a wall of commas.
+            let flagsBlock = """
+                  \(B)Value flags:\(R)
+                    --locale  --voice  --image  --model  --identity
+                    --prompt  --openai-model
+                  \(B)Boolean flags:\(R)
+                    --openai  --local
+                  \(B)Info flags:\(R)
+                    -h --help  -v --version
+                """
             if let suggestion = closestMatch(arg, in: knownFlags) {
                 fatalUsage("""
                     unknown argument '\(arg)'.
-                      Did you mean '\(suggestion)'?
-                      All flags: \(knownFlags.joined(separator: ", "))
+
+                      Did you mean \(B)\(suggestion)\(R)?
+
+                    \(flagsBlock)
                     """)
             }
             fatalUsage("""
                 unknown argument '\(arg)'.
-                  All flags: \(knownFlags.joined(separator: ", "))
+
+                \(flagsBlock)
                 """)
         }
     }
