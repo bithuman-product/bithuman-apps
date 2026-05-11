@@ -116,7 +116,9 @@ final class BinarySmokeTests: XCTestCase {
     func test_promptMissingValue_emitsBothForms() throws {
         let r = try run(["--prompt"])
         XCTAssertEqual(r.exitCode, 2)
-        XCTAssertTrue(r.stderr.contains("Inline string"))
+        // Hint shows both an inline-string form ("--prompt \"...\"") and
+        // a file form ("--prompt @/path...") on labelled rows.
+        XCTAssertTrue(r.stderr.contains("inline"))
         XCTAssertTrue(r.stderr.contains("@/path"))
     }
 
@@ -141,15 +143,21 @@ final class BinarySmokeTests: XCTestCase {
         let r = try run(["--vvoice", "Aiden"])
         XCTAssertEqual(r.exitCode, 2)
         XCTAssertTrue(r.stderr.contains("unknown argument '--vvoice'"))
-        XCTAssertTrue(r.stderr.contains("Did you mean '--voice'?"))
-        XCTAssertTrue(r.stderr.contains("All flags:"))
+        XCTAssertTrue(r.stderr.contains("Did you mean"))
+        // The suggested flag is wrapped in ANSI bold codes; assert the
+        // flag name is present without trying to match the escape bytes.
+        XCTAssertTrue(r.stderr.contains("--voice"))
+        // The valid-flag dump is grouped by category (Value / Boolean
+        // / Info) rather than a flat "All flags:" list.
+        XCTAssertTrue(r.stderr.contains("Value flags:"))
     }
 
     func test_completelyUnknownFlag_listsValidFlagsWithoutSuggestion() throws {
         let r = try run(["--xyzzy"])
         XCTAssertEqual(r.exitCode, 2)
         XCTAssertTrue(r.stderr.contains("unknown argument '--xyzzy'"))
-        XCTAssertTrue(r.stderr.contains("All flags:"))
+        XCTAssertTrue(r.stderr.contains("Value flags:"))
+        XCTAssertTrue(r.stderr.contains("Boolean flags:"))
     }
 
     // MARK: - Unknown subcommand
