@@ -183,23 +183,38 @@ let helpText = """
   --openai-model <id>    Cloud model id. Same flag for every mode;
                          eligible models differ because voice/avatar
                          use the Realtime API while text uses Chat
-                         Completions. ★ marks the cost-optimised
-                         default per mode (May 2026 OpenAI pricing).
+                         Completions. ★ marks the recommended default.
 
                          voice / avatar (Realtime API):
-                           ★ gpt-realtime-1.5   $4   in / $16   out  per 1M tok
-                             gpt-realtime-2     $32  in / $64   out  (newest, GPT-5-class)
+                           ★ gpt-realtime-1.5    improved gen
+                             gpt-realtime-mini   cost-efficient pick
+                             gpt-realtime        baseline
+                             gpt-realtime-2      newest, GPT-5-class
+
+                         Realtime pricing nuance: all four bill audio
+                         the same — $32 in / $64 out per 1M audio
+                         tokens. (Text-token pricing on these models
+                         is $4 / $24 per 1M, but the CLI only uses
+                         them for audio in voice/avatar.) Choice
+                         between them is capability + tier
+                         availability, not cost.
 
                          text (Chat Completions API):
-                           ★ gpt-5.4-mini       $0.75 in / $4.50 out  (workhorse)
-                             gpt-5.4-nano       $0.20 in / $1.25 out  (simple tasks)
-                             gpt-5.4            $2.50 in / $15   out  (frontier)
-                             gpt-5.5            $5    in / $30   out  (newest frontier)
-                             o3-mini                                  (reasoning model)
+                           ★ gpt-5.4-mini        $0.75 in / $4.50 out  per 1M tok
+                             gpt-5.4-nano        $0.20 in / $1.25 out  (simple tasks)
+                             gpt-5.4             $2.50 in / $15   out  (frontier)
+                             gpt-5.5             $5    in / $30   out  (newest frontier)
+                             o3-mini                                   (reasoning model)
 
-                         Legacy (still in API; flagged legacy since
-                         OpenAI retired them from ChatGPT 2026-02-13):
+                         Legacy chat (still in API; flagged legacy
+                         since OpenAI retired them from ChatGPT
+                         2026-02-13):
                            gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, o4-mini
+
+                         Voices (Realtime API, choose via SDK config):
+                           alloy, ash, ballad, coral, echo, sage,
+                           shimmer, verse — 8 originals (updated)
+                           cedar, marin — added with gpt-realtime
 
                          Full list · https://platform.openai.com/docs/models
 
