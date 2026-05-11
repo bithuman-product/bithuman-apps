@@ -98,36 +98,76 @@ enum FlagHint {
         """
 
     /// `--openai-model` is shared across modes but eligible names
-    /// split by API — Realtime for voice/avatar (streaming
-    /// audio in/out over WebRTC), Chat Completions for text. The
-    /// box-drawing table makes the two families scannable at a
-    /// glance. `★` marks the cost-optimised default per mode.
+    /// split by API — Realtime for voice/avatar (streaming audio
+    /// in/out over WebRTC), Chat Completions for text.
     ///
-    /// Pricing snapshot below is May 2026 (per 1M tokens). Defaults
-    /// minimise spend while staying on currently-supported
-    /// (non-legacy) models. Power users can override with any model
-    /// their OpenAI account has access to.
-    static let openAIModel = """
-        The OpenAI model.  \(B)★\(R) = cost-optimised default for the mode.
+    /// Realtime pricing nuance: **all four current Realtime models
+    /// bill audio identically at $32 in / $64 out per 1M tokens.**
+    /// The choice between them is capability + account-tier
+    /// availability, not cost. Don't mistake the text-token pricing
+    /// ($4 in / $24 out) for the audio-token pricing the CLI
+    /// actually uses; the realtime backend uses audio tokens for
+    /// every conversation turn.
+    ///
+    /// Text pricing varies by model — the table shows the per-1M
+    /// rates so users can pick consciously. `★` marks the
+    /// recommended default per mode.
+    static var openAIModel: String {
+        // Column widths picked so the helpful right-pipe lands at the
+        // same column on every data row regardless of name/description
+        // length. Built as an array of pre-padded lines and joined
+        // with "\n", avoiding source-indent leak through string
+        // literals.
+        let modeWidth = 14   // visible width of mode column inside the box
+        let nameWidth = 17   // visible width of model-name column
+        let descWidth = 18   // visible width of description column
+        // Total inside the models cell (between │ and │) = 1 lead + 1 icon
+        // + 1 + nameWidth + 1 + descWidth + 1 trail = 40
+        let modelsWidth = 1 + 1 + 1 + nameWidth + 1 + descWidth + 1   // = 40
+        let modeDashes = String(repeating: "─", count: modeWidth + 2) // +2 for cell padding
+        let modelDashes = String(repeating: "─", count: modelsWidth)
 
-          ┌────────────────┬──────────────────────────────────────────┐
-          │ Mode           │ Model                  $in   /  $out 1M │
-          ├────────────────┼──────────────────────────────────────────┤
-          │ voice / avatar │ \(B)★\(R) gpt-realtime-1.5     $4    /  $16    │
-          │ (Realtime API) │   gpt-realtime-2       $32   /  $64    │
-          ├────────────────┼──────────────────────────────────────────┤
-          │ text           │ \(B)★\(R) gpt-5.4-mini         $0.75 /  $4.50  │
-          │ (Chat API)     │   gpt-5.4-nano         $0.20 /  $1.25  │
-          │                │   gpt-5.4              $2.50 /  $15    │
-          │                │   gpt-5.5              $5    /  $30    │
-          │                │   o3-mini              \(D)(reasoning model)\(R)  │
-          └────────────────┴──────────────────────────────────────────┘
+        func row(_ mode: String, _ icon: String, _ name: String, _ desc: String, dim: Bool = false) -> String {
+            let modePad = mode.padding(toLength: modeWidth, withPad: " ", startingAt: 0)
+            let namePad = name.padding(toLength: nameWidth, withPad: " ", startingAt: 0)
+            let descPad = desc.padding(toLength: descWidth, withPad: " ", startingAt: 0)
+            let descStyled = dim ? "\(D)\(descPad)\(R)" : descPad
+            return "│ \(modePad) │ \(icon) \(namePad) \(descStyled) │"
+        }
 
-          \(D)Legacy (still in API since 2026-02-13 ChatGPT retirement,
-          will be deprecated):\(R) gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, o4-mini.
-
-          Full list · \(B)https://platform.openai.com/docs/models\(R)
-        """
+        let lines: [String] = [
+            "The OpenAI model.  \(B)★\(R) = recommended default for the mode.",
+            "",
+            "  ┌\(modeDashes)┬\(modelDashes)┐",
+            "  │ \("Mode".padding(toLength: modeWidth, withPad: " ", startingAt: 0)) │ \("Eligible models".padding(toLength: modelsWidth - 2, withPad: " ", startingAt: 0)) │",
+            "  ├\(modeDashes)┼\(modelDashes)┤",
+            "  " + row("voice / avatar", " ", "gpt-realtime-mini", "cost-efficient", dim: true),
+            "  " + row("(Realtime API)", " ", "gpt-realtime",      "baseline",            dim: true),
+            "  " + row("",               "\(B)★\(R)", "gpt-realtime-1.5",  "improved gen",        dim: true),
+            "  " + row("",               " ", "gpt-realtime-2",    "newest, GPT-5",       dim: true),
+            "  ├\(modeDashes)┼\(modelDashes)┤",
+            "  " + row("text",           "\(B)★\(R)", "gpt-5.4-mini",  "$0.75 / $4.50"),
+            "  " + row("(Chat API)",     " ", "gpt-5.4-nano",  "$0.20 / $1.25"),
+            "  " + row("",               " ", "gpt-5.4",       "$2.50 / $15"),
+            "  " + row("",               " ", "gpt-5.5",       "$5    / $30"),
+            "  " + row("",               " ", "o3-mini",       "(reasoning)", dim: true),
+            "  └\(modeDashes)┴\(modelDashes)┘",
+            "",
+            "  \(B)Realtime\(R): all four bill audio at $32 in / $64 out per 1M tok —",
+            "  the choice is capability + tier availability, not cost.",
+            "",
+            "  \(B)Text\(R): prices shown are $in / $out per 1M text tokens.",
+            "  \(B)★\(R) marks the value sweet spot — gpt-5.4-nano is cheaper",
+            "  but limited to simple tasks.",
+            "",
+            "  \(D)Legacy chat (still in API; flagged legacy since OpenAI retired",
+            "  them from ChatGPT 2026-02-13):",
+            "    gpt-4o, gpt-4o-mini, gpt-4.1, gpt-4.1-mini, o4-mini.\(R)",
+            "",
+            "  Full list · \(B)https://platform.openai.com/docs/models\(R)",
+        ]
+        return lines.joined(separator: "\n")
+    }
 }
 
 /// Pull the next positional value off the arg iterator for the
