@@ -221,7 +221,6 @@ final class AvatarTexture: NSObject, FlutterTexture {
     if tickCount == 1 || tickCount == 10 || tickCount == 25 {
       NSLog("[BithumanAvatar] tick #%d firing", tickCount)
     }
-    let samplesPerTick = 640
     audioLock.lock()
     if !audioQueue.isEmpty {
       for s in audioQueue {
@@ -231,14 +230,17 @@ final class AvatarTexture: NSObject, FlutterTexture {
       audioQueue.removeAll(keepingCapacity: true)
     }
     audioLock.unlock()
-    // Advance the valid range by one tick. The engine sees the rolling
-    // buffer with audioValidCount samples and advances its compose_cursor
-    // by one tick per call.
-    audioValidCount = min(audioValidCount + samplesPerTick, Self.audioBufferTotal)
+    // The engine's mel frontend needs lookhead — pass the ENTIRE
+    // pre-allocated audio buffer every tick (matches test_v1_bench.cpp's
+    // `tick_compose(rt, pcm, n_pcm, -1, ...)` pattern). The runtime's
+    // internal compose_cursor advances one tick per call. Passing a
+    // partial buffer makes trailing-tick mel features fall back to
+    // zero-pad lookhead, picking a wrong cluster_idx and compositing
+    // a visibly misaligned lip patch.
     var cr = be_compose_result_t()
     let status: be_status = audioBuf.withUnsafeBufferPointer { pcm in
       bgrBuffer.withUnsafeMutableBufferPointer { out in
-        be_runtime_tick_compose(runtime, pcm.baseAddress, audioValidCount, -1,
+        be_runtime_tick_compose(runtime, pcm.baseAddress, Self.audioBufferTotal, -1,
                                 out.baseAddress, out.count, &cr)
       }
     }
@@ -252,9 +254,9 @@ final class AvatarTexture: NSObject, FlutterTexture {
     }
     loggedTickError = false
     guard cr.bytes_written > 0 else { return }
-    if tickCount == 1 || tickCount == 25 {
-      NSLog("[BithumanAvatar] tick #%d composed %d bytes, cluster=%d",
-            tickCount, cr.bytes_written, cr.cluster_idx)
+    if tickCount == 1 {
+      NSLog("[BithumanAvatar] tick #1 composed %d bytes, cluster=%d",
+            cr.bytes_written, cr.cluster_idx)
     }
 
     if frameW == 0, let fixture = fixtureHandle {

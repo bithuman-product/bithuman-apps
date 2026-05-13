@@ -133,11 +133,12 @@ class BithumanAvatarPlugin : FlutterPlugin, MethodCallHandler {
                                     audioWriteIdx = (audioWriteIdx + 1) % audioBufTotal
                                 }
                             }
-                            audioValidCount =
-                                kotlin.math.min(audioValidCount + SAMPLES_PER_TICK, audioBufTotal)
-                            // Pass full accumulated buffer; engine cursor advances internally.
-                            val validPcm = audioBuf.copyOfRange(0, audioValidCount)
-                            runtime.tickCompose(validPcm, /* frameIdxHint */ -1, /* frameOut */ bgrBuf)
+                            // Pass the ENTIRE pre-allocated buffer every tick.
+                            // The engine's compose_cursor advances one tick per
+                            // call; passing a partial range makes trailing-tick
+                            // mel features use zero-pad lookhead, picking a wrong
+                            // cluster_idx (visible as a misaligned lip patch).
+                            runtime.tickCompose(audioBuf, /* frameIdxHint */ -1, /* frameOut */ bgrBuf)
 
                             if (frameW == 0) {
                                 val info = fixture.info

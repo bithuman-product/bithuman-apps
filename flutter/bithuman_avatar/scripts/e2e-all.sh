@@ -152,20 +152,21 @@ run_android_emu() {
     echo "==== Android emulator ===="
     local serial
     serial=$(adb devices 2>/dev/null \
-        | awk '/^emulator-[0-9]+\s+device$/ {print $1}' | head -1)
+        | awk '$1 ~ /^emulator-[0-9]+$/ && $2 == "device" {print $1; exit}')
     if [ -z "$serial" ]; then echo "  no emulator"; return; fi
 
     cd "$EXAMPLE_DIR" || return
-    flutter build apk --debug \
-        --dart-define BITHUMAN_BUNDLED_AVATAR=true >/dev/null 2>&1 || {
+    flutter build apk --debug >/dev/null 2>&1 || {
         echo "  BUILD FAILED"; result_android_emu="fail"; return
     }
+    adb -s "$serial" shell pm clear ai.bithuman.bithuman_avatar_example >/dev/null 2>&1
     adb -s "$serial" install -r \
         "$EXAMPLE_DIR/build/app/outputs/flutter-apk/app-debug.apk" >/dev/null
     adb -s "$serial" shell am start -n \
         ai.bithuman.bithuman_avatar_example/.MainActivity >/dev/null
-    echo "  waiting 12s for download + first compose…"; sleep 12
-    adb -s "$serial" exec-out screencap -p > "$OUT_DIR/android_emu.png"
+    echo "  waiting 35s for download + first compose…"; sleep 35
+    adb -s "$serial" shell screencap -p /sdcard/sc.png >/dev/null
+    adb -s "$serial" pull /sdcard/sc.png "$OUT_DIR/android_emu.png" >/dev/null
     adb -s "$serial" shell am force-stop ai.bithuman.bithuman_avatar_example >/dev/null
     if pixel_validate "$OUT_DIR/android_emu.png"; then result_android_emu="pass"
     else result_android_emu="fail"; fi
@@ -177,22 +178,22 @@ run_android_device() {
     echo "==== Android device ===="
     local serial
     serial=$(adb devices 2>/dev/null \
-        | awk '/^[A-Z0-9]+\s+device$/ && $1 !~ /emulator/ {print $1}' | head -1)
+        | awk '$2 == "device" && $1 !~ /^emulator-/ {print $1; exit}')
     if [ -z "$serial" ]; then echo "  no physical device"; return; fi
 
     cd "$EXAMPLE_DIR" || return
-    # Same APK as emu (arm64-v8a target). Skip rebuild if APK already exists.
     [ -f "$EXAMPLE_DIR/build/app/outputs/flutter-apk/app-debug.apk" ] || \
-        flutter build apk --debug \
-            --dart-define BITHUMAN_BUNDLED_AVATAR=true >/dev/null 2>&1 || {
+        flutter build apk --debug >/dev/null 2>&1 || {
             echo "  BUILD FAILED"; result_android_device="fail"; return
         }
+    adb -s "$serial" shell pm clear ai.bithuman.bithuman_avatar_example >/dev/null 2>&1
     adb -s "$serial" install -r \
         "$EXAMPLE_DIR/build/app/outputs/flutter-apk/app-debug.apk" >/dev/null
     adb -s "$serial" shell am start -n \
         ai.bithuman.bithuman_avatar_example/.MainActivity >/dev/null
-    echo "  waiting 12s for download + first compose…"; sleep 12
-    adb -s "$serial" exec-out screencap -p > "$OUT_DIR/android_device.png"
+    echo "  waiting 35s for download + first compose…"; sleep 35
+    adb -s "$serial" shell screencap -p /sdcard/sc.png >/dev/null
+    adb -s "$serial" pull /sdcard/sc.png "$OUT_DIR/android_device.png" >/dev/null
     adb -s "$serial" shell am force-stop ai.bithuman.bithuman_avatar_example >/dev/null
     if pixel_validate "$OUT_DIR/android_device.png"; then result_android_device="pass"
     else result_android_device="fail"; fi

@@ -239,7 +239,6 @@ final class AvatarTexture: NSObject, FlutterTexture {
   private func composeTick() {
     guard !isShutdown, let runtime = runtimeHandle else { return }
 
-    let samplesPerTick = 640
     audioLock.lock()
     if !audioQueue.isEmpty {
       for s in audioQueue {
@@ -249,12 +248,15 @@ final class AvatarTexture: NSObject, FlutterTexture {
       audioQueue.removeAll(keepingCapacity: true)
     }
     audioLock.unlock()
-    audioValidCount = min(audioValidCount + samplesPerTick, Self.audioBufferTotal)
-
+    // Pass the ENTIRE pre-allocated buffer every tick (matches
+    // test_v1_bench.cpp's tick_compose pattern). Internal compose_cursor
+    // advances one tick per call. Partial buffer makes trailing-tick mel
+    // features fall back to zero-pad lookhead, which picks a wrong
+    // cluster_idx and composites a visibly misaligned lip patch.
     var cr = be_compose_result_t()
     let status: be_status = audioBuf.withUnsafeBufferPointer { pcm in
       bgrBuffer.withUnsafeMutableBufferPointer { out in
-        be_runtime_tick_compose(runtime, pcm.baseAddress, audioValidCount, -1,
+        be_runtime_tick_compose(runtime, pcm.baseAddress, Self.audioBufferTotal, -1,
                                 out.baseAddress, out.count, &cr)
       }
     }
