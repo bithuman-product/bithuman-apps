@@ -33,7 +33,10 @@
 extern "C" {
 #endif
 
-#define BE_ABI_VERSION 4   /* v4: added be_runtime_tick_compose_to_size +
+#define BE_ABI_VERSION 5   /* v5: added be_audio_decode_file/bytes + be_audio_free
+                            * (canonical PCM-input path; eliminates per-binding
+                            * resample drift).
+                            * v4 added be_runtime_tick_compose_to_size +
                             * be_compose_size_t (720p auto-fit / letterbox).
                             * v3 introduced be_auth_* + BE_ERR_NO_AUTH. */
 
@@ -364,6 +367,152 @@ const char* be_auth_last_error(void);
 
 /* Frees the singleton client + any running thread. */
 void be_auth_shutdown(void);
+
+/* ---------------------------------------------------------------- */
+/*  Audio decode (canonical PCM input — ABI v5)                     */
+/* ---------------------------------------------------------------- */
+/* Decode any libavformat-supported audio source (WAV / MP3 / AAC /
+ * FLAC / OGG / Opus / MP4-with-audio) to canonical 16 kHz mono float32
+ * PCM — the engine's tick input format. Centralizing this in libessence
+ * eliminates the per-binding resampling drift that creeps in when
+ * Python/Swift/Kotlin/Rust each pick their own resampler with subtly
+ * different anti-alias filters.
+ *
+ * Mixing policy:
+ *   - multi-channel input is downmixed to mono via libswresample
+ *     (default matrix: average of channels)
+ *   - any sample rate is resampled to 16 kHz via libswresample's
+ *     soxr-equivalent SWR_FILTER_TYPE_KAISER kernel
+ *   - output sample format is f32 in the range [-1.0, 1.0]
+ *
+ * Memory ownership:
+ *   On BE_OK the caller owns *out_pcm and MUST free it via be_audio_free.
+ *   *out_samples is the f32 sample count (== seconds * 16000).
+ *   Both out-pointers are unchanged on non-OK return.
+ *
+ * Errors:
+ *   BE_ERR_INVALID_ARG     — null args
+ *   BE_ERR_FILE_NOT_FOUND  — path can't be opened
+ *   BE_ERR_FILE_CORRUPT    — libavformat couldn't parse, or no audio stream
+ *   BE_ERR_AUDIO_FORMAT    — codec missing in this libessence build
+ *   BE_ERR_OUT_OF_MEMORY   — allocation failed
+ *   BE_ERR_INTERNAL        — libavcodec/libswresample failure (see be_last_error_message) */
+be_status be_audio_decode_file(const char* path,
+                               float**     out_pcm,
+                               size_t*     out_samples);
+
+be_status be_audio_decode_bytes(const uint8_t* data,
+                                size_t         len,
+                                float**        out_pcm,
+                                size_t*        out_samples);
+
+/* Free a buffer allocated by be_audio_decode_file / be_audio_decode_bytes.
+ * NULL-safe. After this call the pointer is dangling — do not dereference. */
+void be_audio_free(float* pcm);
+
+/* ---------------------------------------------------------------- */
+/*  Session render (drive compose loop in C — ABI v5)               */
+/* ---------------------------------------------------------------- */
+/* Callback signature: invoked once per composed BGR frame. Return 0 to
+ * continue the loop, non-zero to abort. The frame buffer is owned by
+ * libessence (the same buffer is reused next tick) — copy if you need
+ * to retain it across the callback boundary.
+ *
+ * frame_idx: 0-based tick index, monotonically increasing.
+ * cluster_idx: which audio cluster the engine picked for this frame.
+ * frame_idx_used: the source-video frame index the engine composited
+ *                 against (advances cyclically modulo num_source_frames). */
+typedef int (*be_frame_callback)(uint32_t       frame_idx,
+                                 uint32_t       cluster_idx,
+                                 uint32_t       frame_idx_used,
+                                 const uint8_t* bgr_data,
+                                 uint32_t       bgr_w,
+                                 uint32_t       bgr_h,
+                                 void*          user);
+
+/* Drive the full compose loop over a PCM buffer. Slices the input into
+ * 40 ms ticks (640 samples @ 16 kHz), calls be_runtime_tick_compose_to_size
+ * on each, and invokes `cb` with the result.
+ *
+ * Trailing samples (count not divisible by 640) are zero-padded to one
+ * final tick. This matches the Python reference's "last_chunk=True" flush
+ * semantics and ensures audio shorter than `audio_duration_floor(640)`
+ * still produces at least one frame. (Without this, callers re-implement
+ * the EOS handling — see fix 0543a10 in the Rust CLI.)
+ *
+ * `size` is the same be_compose_size_t accepted by
+ * be_runtime_tick_compose_to_size; pass NULL or {0, 0} for the engine's
+ * native resolution (no resize / canvas).
+ *
+ * Return: BE_OK on full success, BE_ERR_NO_AUTH if heartbeat isn't
+ * configured, BE_ERR_AUTH_FATAL if it's terminal, or the callback's
+ * non-zero return code (passed back as BE_ERR_INTERNAL if positive). */
+be_status be_session_render_pcm(be_runtime_t*            rt,
+                                const float*             pcm,
+                                size_t                   sample_count,
+                                const be_compose_size_t* size,   /* nullable */
+                                be_frame_callback        cb,
+                                void*                    user);
+
+/* ---------------------------------------------------------------- */
+/*  Video encoder + one-shot session record (ABI v5)                */
+/* ---------------------------------------------------------------- */
+/* Opens a libavformat-backed H.264 + AAC MP4 sink. Encoder dispatch
+ * is automatic by platform: h264_videotoolbox on Apple (hardware),
+ * h264_mediacodec on Android (hardware), libx264 on Linux/Windows.
+ * Audio track is optional — pass NULL `audio_src` for a video-only file.
+ *
+ * Output: MP4 with H.264 video (yuv420p), AAC audio, +faststart. */
+
+typedef enum be_encoder_quality {
+  BE_QUALITY_LOW    = 0,  /* libx264 -preset veryfast -crf 28 */
+  BE_QUALITY_MEDIUM = 1,  /* libx264 -preset medium   -crf 23 (default) */
+  BE_QUALITY_HIGH   = 2,  /* libx264 -preset slower   -crf 18 */
+} be_encoder_quality;
+
+/* Opaque encoder handle. */
+typedef struct be_video_encoder be_video_encoder_t;
+
+/* Open an MP4 sink at `path`. After this returns BE_OK, the caller pushes
+ * BGR frames via be_video_encoder_write_frame at the rate implied by `fps`
+ * and finalizes by calling be_video_encoder_close. */
+be_status be_video_encoder_open(const char*          path,
+                                uint32_t             w,
+                                uint32_t             h,
+                                uint32_t             fps,
+                                be_encoder_quality   quality,
+                                be_video_encoder_t** out);
+
+/* Push one BGR24 frame (w*h*3 bytes). Frames must be sized to match the
+ * (w, h) passed to open. Returns BE_ERR_BUFFER_TOO_SMALL if the caller
+ * passes the wrong number of bytes. */
+be_status be_video_encoder_write_frame(be_video_encoder_t* enc,
+                                       const uint8_t*      bgr,
+                                       size_t              bgr_len);
+
+/* Mux audio into the MP4 from a libavformat-readable source. Must be
+ * called after the LAST write_frame and before close. Pass NULL to
+ * finalize without audio. The source can be anything libavformat
+ * decodes (WAV / MP3 / AAC / FLAC / OGG / Opus / MP4-with-audio). */
+be_status be_video_encoder_attach_audio(be_video_encoder_t* enc,
+                                        const char*         audio_src);
+
+/* Flush remaining frames, write the moov atom, free the encoder. */
+be_status be_video_encoder_close(be_video_encoder_t* enc);
+
+/* One-shot helper: render a PCM buffer through the runtime AND mux the
+ * audio source into an MP4 in a single call. Combines be_session_render_pcm
+ * with be_video_encoder_open / write_frame / attach_audio / close. The
+ * audio path goes through be_audio_decode_file(audio_src) → engine ticks;
+ * the same `audio_src` is muxed verbatim into the output MP4 track.
+ *
+ * This collapses what was ~250 lines of orchestration code in each binding
+ * (Rust `cmd/generate.rs`, Swift `bithuman-render`) to a single C call. */
+be_status be_session_record_mp4(be_runtime_t*            rt,
+                                const char*              audio_src,
+                                const be_compose_size_t* size,   /* nullable */
+                                const char*              out_mp4,
+                                be_encoder_quality       quality);
 
 #ifdef __cplusplus
 }  /* extern "C" */
