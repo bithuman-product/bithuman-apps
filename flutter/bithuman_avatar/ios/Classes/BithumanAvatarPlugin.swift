@@ -141,7 +141,13 @@ final class AvatarTexture: NSObject, FlutterTexture {
   }
 
   func startRendering() {
-    renderQueue.async { [weak self] in self?.loadAndRender() }
+    // be_fixture_load needs to run on the platform thread (background
+    // DispatchQueue causes a hang on macOS — ORT EP setup has main-thread
+    // affinity; iOS appears tolerant but we keep the path consistent).
+    loadFixtureAndRuntime()
+    if runtimeHandle != nil {
+      renderQueue.async { [weak self] in self?.startTimer() }
+    }
   }
 
   func shutdown() {
@@ -159,13 +165,21 @@ final class AvatarTexture: NSObject, FlutterTexture {
   private let audioLock = NSLock()
   private let pixelBufferLock = NSLock()
 
-  private var audioQueue: [Float] = []
+  // The libessence runtime expects the FULL accumulated audio buffer on
+  // every tick — its internal compose_cursor advances by one tick per
+  // call. Preallocate 60 s @ 16 kHz; grow valid-region as ticks fire.
+  private static let audioBufferTotal = 16_000 * 60
+  private var audioBuf = [Float](repeating: 0, count: audioBufferTotal)
+  private var audioValidCount: Int = 0
+  private var audioWriteIdx: Int = 0
+  private var audioQueue: [Float] = []   // pending pushAudio samples
   private var latestPixelBuffer: CVPixelBuffer?
   private var timer: DispatchSourceTimer?
   private var isShutdown = false
 
   private var fixtureHandle: OpaquePointer? = nil
   private var runtimeHandle: OpaquePointer? = nil
+  private var loggedTickError = false
 
   // Lazy v1 init: frame dims are 0 until the first compose. Pre-allocate
   // at 1920x1080x3 ceiling so the first call always has space.
@@ -174,7 +188,7 @@ final class AvatarTexture: NSObject, FlutterTexture {
   private var frameH: Int = 0
   private var pixelBufferPool: CVPixelBufferPool? = nil
 
-  private func loadAndRender() {
+  private func loadFixtureAndRuntime() {
     NSLog("[BithumanAvatar] load begin path=%@", imxPath)
 
     var fopts = be_fixture_options_t()
@@ -211,8 +225,10 @@ final class AvatarTexture: NSObject, FlutterTexture {
       return
     }
     runtimeHandle = runtime
-    NSLog("[BithumanAvatar] runtime ready — starting 25 fps timer")
+    NSLog("[BithumanAvatar] runtime ready")
+  }
 
+  private func startTimer() {
     let t = DispatchSource.makeTimerSource(queue: renderQueue)
     t.schedule(deadline: .now() + 0.040, repeating: 0.040, leeway: .milliseconds(2))
     t.setEventHandler { [weak self] in self?.composeTick() }
@@ -223,31 +239,41 @@ final class AvatarTexture: NSObject, FlutterTexture {
   private func composeTick() {
     guard !isShutdown, let runtime = runtimeHandle else { return }
 
-    let samplesNeeded = 640
+    let samplesPerTick = 640
     audioLock.lock()
-    let available = min(audioQueue.count, samplesNeeded)
-    var pcm = [Float](repeating: 0, count: samplesNeeded)
-    if available > 0 {
-      pcm.replaceSubrange(0..<available, with: audioQueue[0..<available])
-      audioQueue.removeFirst(available)
+    if !audioQueue.isEmpty {
+      for s in audioQueue {
+        audioBuf[audioWriteIdx] = s
+        audioWriteIdx = (audioWriteIdx + 1) % Self.audioBufferTotal
+      }
+      audioQueue.removeAll(keepingCapacity: true)
     }
     audioLock.unlock()
+    audioValidCount = min(audioValidCount + samplesPerTick, Self.audioBufferTotal)
 
     var cr = be_compose_result_t()
-    let status: be_status = bgrBuffer.withUnsafeMutableBufferPointer { out in
-      be_runtime_tick_compose(runtime, pcm, samplesNeeded, -1,
-                              out.baseAddress, out.count, &cr)
+    let status: be_status = audioBuf.withUnsafeBufferPointer { pcm in
+      bgrBuffer.withUnsafeMutableBufferPointer { out in
+        be_runtime_tick_compose(runtime, pcm.baseAddress, audioValidCount, -1,
+                                out.baseAddress, out.count, &cr)
+      }
     }
     guard status == BE_OK else {
       // Boundary at end-of-audio is normal once we hand the engine a
       // finite stream — silence pads keep us inside cached_n_ticks.
-      // Log other errors only.
+      // Log other errors only — and log only once per shutdown cycle
+      // to avoid 25 lines/sec of noise.
       let code = status.rawValue
       if code != BE_ERR_AUDIO_FORMAT.rawValue {
-        NSLog("[BithumanAvatar] tick status=%d", code)
+        if !loggedTickError {
+          loggedTickError = true
+          let msg = String(cString: be_last_error_message())
+          NSLog("[BithumanAvatar] tick status=%d msg=%@", code, msg)
+        }
       }
       return
     }
+    loggedTickError = false
     guard cr.bytes_written > 0 else { return }
 
     if frameW == 0, let fixture = fixtureHandle {

@@ -61,14 +61,19 @@ Pod::Spec.new do |s|
     '-framework Accelerate -framework VideoToolbox -framework AudioToolbox ' \
     '-framework CoreMedia -framework CoreVideo -framework UIKit'
 
+  # NB: -force_load on libavcodec.a is required so the FFmpeg parser
+  # registry (h264_parser etc., registered via static initializers) doesn't
+  # get dead-stripped by ld --gc-sections. Without it,
+  # avformat_find_stream_info populates codecpar but width/height stay 0
+  # and libessence's H264Decoder fails with "invalid codec dimensions".
   iphoneos_libs =
     "#{be_cpp}/build-ios/Release-iphoneos/libessence.a " \
     "#{be_cpp}/third_party/webp-ios/lib/iphoneos/libwebp.a " \
     "#{be_cpp}/third_party/jpeg-turbo-ios/lib/iphoneos/libjpeg.a " \
     "#{be_cpp}/third_party/hdf5-ios/lib/iphoneos/libhdf5_hl.a " \
     "#{be_cpp}/third_party/hdf5-ios/lib/iphoneos/libhdf5.a " \
-    "#{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libavformat.a " \
-    "#{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libavcodec.a " \
+    "-force_load #{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libavformat.a " \
+    "-force_load #{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libavcodec.a " \
     "#{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libswscale.a " \
     "#{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libswresample.a " \
     "#{be_cpp}/third_party/ffmpeg-ios/lib/iphoneos/libavutil.a"
@@ -80,8 +85,8 @@ Pod::Spec.new do |s|
     "#{be_cpp}/third_party/jpeg-turbo-ios/lib/iphonesimulator/libjpeg.a " \
     "#{be_cpp}/third_party/hdf5-ios/lib/iphonesimulator/libhdf5_hl.a " \
     "#{be_cpp}/third_party/hdf5-ios/lib/iphonesimulator/libhdf5.a " \
-    "#{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libavformat.a " \
-    "#{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libavcodec.a " \
+    "-force_load #{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libavformat.a " \
+    "-force_load #{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libavcodec.a " \
     "#{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libswscale.a " \
     "#{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libswresample.a " \
     "#{be_cpp}/third_party/ffmpeg-ios/lib/iphonesimulator/libavutil.a"
@@ -89,7 +94,9 @@ Pod::Spec.new do |s|
   # Pod-target xcconfig: applies to the bithuman_avatar pod build itself.
   s.pod_target_xcconfig = {
     'DEFINES_MODULE'                       => 'YES',
-    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
+    # libessence.a sim slice is arm64-only — Xcode/Flutter sometimes tries a
+    # fat x86_64+arm64 sim build which fails linking on Apple Silicon hosts.
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 x86_64',
     'HEADER_SEARCH_PATHS'                  => '$(inherited) $(PODS_TARGET_SRCROOT)/Classes/CLibessence',
     'SWIFT_INCLUDE_PATHS'                  => '$(inherited) $(PODS_TARGET_SRCROOT)/Classes/CLibessence',
     # Make `import CLibessence` resolve from Swift without overriding the
@@ -109,5 +116,8 @@ Pod::Spec.new do |s|
   s.user_target_xcconfig = {
     'OTHER_LDFLAGS[sdk=iphoneos*]'        => "$(inherited) #{iphoneos_libs_abs} #{common_frameworks}",
     'OTHER_LDFLAGS[sdk=iphonesimulator*]' => "$(inherited) #{iphonesim_libs_abs} #{common_frameworks}",
+    # Propagate the arch restriction so the example app target doesn't
+    # try to build a fat x86_64+arm64 sim slice.
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 x86_64',
   }
 end

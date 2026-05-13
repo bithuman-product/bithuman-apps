@@ -17,3 +17,7 @@ pubspec.lock
 
 # OS
 .DS_Store
+
+# Bundled sample .imx is too large for GitHub (>100MB).
+# Fetched at runtime from the public tap-repo release.
+example/assets/sample-avatar.imx

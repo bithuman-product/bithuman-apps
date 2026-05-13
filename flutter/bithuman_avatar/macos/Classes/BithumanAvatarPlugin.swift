@@ -120,7 +120,16 @@ final class AvatarTexture: NSObject, FlutterTexture {
   }
 
   func startRendering() {
-    renderQueue.async { [weak self] in self?.loadAndRender() }
+    // be_fixture_load on a background DispatchQueue can hang on macOS
+    // (ORT's CoreML EP appears to have main-thread affinity for some
+    // setup work). Call it synchronously here — we're already inside the
+    // MethodChannel handler on the platform thread, so blocking briefly
+    // is OK. After the runtime is ready, the 25-fps compose loop runs
+    // on renderQueue as before.
+    loadFixtureAndRuntime()
+    if runtimeHandle != nil {
+      renderQueue.async { [weak self] in self?.startTimer() }
+    }
   }
 
   func shutdown() {
@@ -135,20 +144,31 @@ final class AvatarTexture: NSObject, FlutterTexture {
   private let audioLock = NSLock()
   private let pixelBufferLock = NSLock()
 
-  private var audioQueue: [Float] = []
+  // The libessence runtime expects to see the FULL accumulated audio
+  // buffer on every tick — its internal compose_cursor advances by one
+  // tick per call. Maintain a fixed-size buffer and grow the "valid"
+  // region as ticks fire / pushAudio appends. 60 seconds at 16 kHz
+  // = 960 000 samples = 3.84 MB. Loop back to zero when full.
+  private static let audioBufferTotal = 16_000 * 60
+  private var audioBuf = [Float](repeating: 0, count: audioBufferTotal)
+  private var audioValidCount: Int = 0
+  private var audioWriteIdx: Int = 0   // where next pushAudio sample goes
+  private var audioQueue: [Float] = [] // pending pushAudio samples (16kHz f32)
   private var latestPixelBuffer: CVPixelBuffer?
   private var timer: DispatchSourceTimer?
   private var isShutdown = false
 
   private var fixtureHandle: OpaquePointer? = nil
   private var runtimeHandle: OpaquePointer? = nil
+  private var tickCount = 0
+  private var loggedTickError = false
 
   private var bgrBuffer = [UInt8](repeating: 0, count: 1920 * 1080 * 3)
   private var frameW: Int = 0
   private var frameH: Int = 0
   private var pixelBufferPool: CVPixelBufferPool? = nil
 
-  private func loadAndRender() {
+  private func loadFixtureAndRuntime() {
     NSLog("[BithumanAvatar] load begin path=%@", imxPath)
     var fopts = be_fixture_options_t()
     fopts.abi_version      = UInt32(BE_ABI_VERSION)
@@ -183,31 +203,59 @@ final class AvatarTexture: NSObject, FlutterTexture {
       return
     }
     runtimeHandle = runtime
+    NSLog("[BithumanAvatar] runtime ready")
+  }
 
+  private func startTimer() {
     let t = DispatchSource.makeTimerSource(queue: renderQueue)
     t.schedule(deadline: .now() + 0.040, repeating: 0.040, leeway: .milliseconds(2))
     t.setEventHandler { [weak self] in self?.composeTick() }
     timer = t
     t.resume()
+    NSLog("[BithumanAvatar] timer started")
   }
 
   private func composeTick() {
     guard !isShutdown, let runtime = runtimeHandle else { return }
-    let samplesNeeded = 640
+    tickCount += 1
+    if tickCount == 1 || tickCount == 10 || tickCount == 25 {
+      NSLog("[BithumanAvatar] tick #%d firing", tickCount)
+    }
+    let samplesPerTick = 640
     audioLock.lock()
-    let available = min(audioQueue.count, samplesNeeded)
-    var pcm = [Float](repeating: 0, count: samplesNeeded)
-    if available > 0 {
-      pcm.replaceSubrange(0..<available, with: audioQueue[0..<available])
-      audioQueue.removeFirst(available)
+    if !audioQueue.isEmpty {
+      for s in audioQueue {
+        audioBuf[audioWriteIdx] = s
+        audioWriteIdx = (audioWriteIdx + 1) % Self.audioBufferTotal
+      }
+      audioQueue.removeAll(keepingCapacity: true)
     }
     audioLock.unlock()
+    // Advance the valid range by one tick. The engine sees the rolling
+    // buffer with audioValidCount samples and advances its compose_cursor
+    // by one tick per call.
+    audioValidCount = min(audioValidCount + samplesPerTick, Self.audioBufferTotal)
     var cr = be_compose_result_t()
-    let status: be_status = bgrBuffer.withUnsafeMutableBufferPointer { out in
-      be_runtime_tick_compose(runtime, pcm, samplesNeeded, -1,
-                              out.baseAddress, out.count, &cr)
+    let status: be_status = audioBuf.withUnsafeBufferPointer { pcm in
+      bgrBuffer.withUnsafeMutableBufferPointer { out in
+        be_runtime_tick_compose(runtime, pcm.baseAddress, audioValidCount, -1,
+                                out.baseAddress, out.count, &cr)
+      }
     }
-    guard status == BE_OK, cr.bytes_written > 0 else { return }
+    if status != BE_OK {
+      if !loggedTickError {
+        loggedTickError = true
+        let msg = String(cString: be_last_error_message())
+        NSLog("[BithumanAvatar] tick status=%d msg=%@", status.rawValue, msg)
+      }
+      return
+    }
+    loggedTickError = false
+    guard cr.bytes_written > 0 else { return }
+    if tickCount == 1 || tickCount == 25 {
+      NSLog("[BithumanAvatar] tick #%d composed %d bytes, cluster=%d",
+            tickCount, cr.bytes_written, cr.cluster_idx)
+    }
 
     if frameW == 0, let fixture = fixtureHandle {
       var info = be_fixture_info_t()

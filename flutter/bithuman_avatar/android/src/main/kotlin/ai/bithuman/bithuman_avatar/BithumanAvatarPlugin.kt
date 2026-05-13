@@ -49,13 +49,14 @@ class BithumanAvatarPlugin : FlutterPlugin, MethodCallHandler {
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         // Public-catalog .imx files don't need metering, but the engine's
         // auth gate fires without this. Bypass at process scope.
-        System.setProperty("BITHUMAN_UNMETERED", "1")
+        // android.system.Os.setenv is the only way to set a real POSIX env
+        // var on Android — System.setProperty / ProcessBuilder.environment
+        // only affect the JVM, not the C library's getenv().
         try {
-            // Some libessence builds read setenv() not the JVM property —
-            // poke both for safety.
-            val pb = ProcessBuilder()
-            pb.environment()["BITHUMAN_UNMETERED"] = "1"
-        } catch (_: Exception) {}
+            android.system.Os.setenv("BITHUMAN_UNMETERED", "1", true)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Os.setenv BITHUMAN_UNMETERED failed: ${e.message}")
+        }
 
         channel = MethodChannel(binding.binaryMessenger, "ai.bithuman.avatar")
         textureRegistry = binding.textureRegistry
@@ -90,19 +91,29 @@ class BithumanAvatarPlugin : FlutterPlugin, MethodCallHandler {
             result.error("BAD_ARGS", "load requires path", null)
             return
         }
-        // Fixture construction is slow (~400 ms cold) — off-load to thread pool.
+        // textureRegistry.createSurfaceTexture() instantiates a Handler
+        // and MUST run on the main looper. Allocate the entry here
+        // (already on main thread because MethodCallHandler is invoked
+        // there), then off-load the slow Fixture/Runtime construction.
+        val entry = textureRegistry.createSurfaceTexture()
+        val surface = Surface(entry.surfaceTexture())
         executor.submit {
             try {
                 Log.i(TAG, "load start: $path")
                 val fixture = Fixture(path, ExecutionProvider.CPU, intraOpThreads = 1)
                 val runtime = Runtime(fixture)
-                val entry = textureRegistry.createSurfaceTexture()
-                val surface = Surface(entry.surfaceTexture())
 
                 val bgrBuf = ByteArray(MAX_FRAME_W * MAX_FRAME_H * 3)
                 val audioQueue = ConcurrentLinkedDeque<FloatArray>()
                 val stopped = AtomicBoolean(false)
-                val silence = FloatArray(SAMPLES_PER_TICK)
+                // libessence runtime expects the FULL accumulated audio
+                // buffer on every tickCompose — its internal cursor advances
+                // one tick per call. Preallocate 60 s @ 16 kHz; grow valid
+                // region as ticks fire / pushAudio appends.
+                val audioBufTotal = 16_000 * 60
+                val audioBuf = FloatArray(audioBufTotal)
+                var audioValidCount = 0
+                var audioWriteIdx = 0
 
                 // bitmap + argb scratch are sized after first tickCompose.
                 var bitmap: Bitmap? = null
@@ -114,8 +125,19 @@ class BithumanAvatarPlugin : FlutterPlugin, MethodCallHandler {
                     {
                         if (stopped.get()) return@scheduleAtFixedRate
                         try {
-                            val pcm: FloatArray = audioQueue.pollFirst() ?: silence
-                            runtime.tickCompose(pcm, /* frameIdxHint */ -1, /* frameOut */ bgrBuf)
+                            // Drain pushAudio queue into the rolling buffer.
+                            while (true) {
+                                val chunk = audioQueue.pollFirst() ?: break
+                                for (s in chunk) {
+                                    audioBuf[audioWriteIdx] = s
+                                    audioWriteIdx = (audioWriteIdx + 1) % audioBufTotal
+                                }
+                            }
+                            audioValidCount =
+                                kotlin.math.min(audioValidCount + SAMPLES_PER_TICK, audioBufTotal)
+                            // Pass full accumulated buffer; engine cursor advances internally.
+                            val validPcm = audioBuf.copyOfRange(0, audioValidCount)
+                            runtime.tickCompose(validPcm, /* frameIdxHint */ -1, /* frameOut */ bgrBuf)
 
                             if (frameW == 0) {
                                 val info = fixture.info

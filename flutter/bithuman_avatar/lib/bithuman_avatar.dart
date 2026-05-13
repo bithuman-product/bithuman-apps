@@ -8,7 +8,7 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File, HttpClient, HttpClientResponse;
+import 'dart:io' show Directory, File, HttpClient, HttpClientResponse;
 import 'dart:typed_data' show Int16List;
 
 import 'package:flutter/services.dart';
@@ -120,8 +120,14 @@ Future<List<BithumanAgent>> fetchPublicAgents({int limit = 60}) async {
 }
 
 /// Download `agent.modelUrl` into `<cacheDir>/<id>.imx`. Cached by id so
-/// re-tapping the same avatar doesn't re-download.
+/// re-tapping the same avatar doesn't re-download. Creates the cache
+/// directory if it doesn't exist (some platforms — especially macOS
+/// sandbox — return a tmp path that hasn't been mkdir'd yet).
 Future<String> downloadAgentImx(BithumanAgent agent, String cacheDir) async {
+  final dir = Directory(cacheDir);
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
   final local = File('$cacheDir/${agent.id}.imx');
   if (await local.exists() && (await local.length()) > 1024 * 1024) {
     return local.path;
@@ -134,8 +140,34 @@ Future<String> downloadAgentImx(BithumanAgent agent, String cacheDir) async {
       throw BithumanAvatarException(
           '.imx download HTTP ${res.statusCode} from ${agent.modelUrl}');
     }
-    final sink = local.openWrite();
-    await res.pipe(sink);
+    // Stream to a `.partial` file then rename, so a cancelled / failed
+    // download doesn't leave a half-baked file that passes the "size > 1 MB"
+    // cache check next time.
+    final tmp = File('${local.path}.partial');
+    final sink = tmp.openWrite();
+    try {
+      await res.pipe(sink);
+    } catch (e) {
+      try { await tmp.delete(); } catch (_) {}
+      rethrow;
+    }
+    await tmp.rename(local.path);
+    // Validate the downloaded file before returning. An .imx must
+    // start with the literal bytes "IMX\0" and be at least a few MB.
+    final size = await local.length();
+    if (size < 1024 * 1024) {
+      await local.delete();
+      throw BithumanAvatarException(
+          'downloaded .imx is suspiciously small: $size bytes');
+    }
+    final magic = await local.openRead(0, 4).first;
+    if (magic.length < 4 ||
+        magic[0] != 0x49 || magic[1] != 0x4D ||
+        magic[2] != 0x58 || magic[3] != 0x00) {
+      await local.delete();
+      throw BithumanAvatarException(
+          'downloaded .imx has wrong magic header (expected "IMX\\0")');
+    }
     return local.path;
   } finally {
     client.close();

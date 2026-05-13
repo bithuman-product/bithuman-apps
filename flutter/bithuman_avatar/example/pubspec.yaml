@@ -51,11 +51,12 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+  # The canonical 120 MB sample-avatar.imx is downloaded at first
+  # launch from
+  #   https://github.com/bithuman-product/homebrew-bithuman/releases/.../sample-avatar.imx
+  # rather than bundled (GitHub's 100 MB file limit + keeping the
+  # plugin clone small).
 
   # To add assets to your application, add an assets section, like this:
   # assets:
