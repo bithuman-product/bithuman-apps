@@ -1,0 +1,19 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+pubspec.lock
+**/Pods/
+**/Pods.lock
+
+# IDE
+*.iml
+.idea/
+.vscode/
+
+# OS
+.DS_Store
