@@ -152,11 +152,46 @@ flutter run -d macos
 flutter run -d android
 ```
 
-## Phasing
+## Phasing — status as of v1.0
 
-- **v0 (this commit)**: Dart API, iOS plugin scaffold (stub native render), example app fetches the bithuman.ai catalog + shows the grid + tap-to-load wires through. No actual avatar rendering yet.
-- **v0.1**: iOS native render path with real libessence.xcframework binding. Visible avatar in iOS Simulator.
-- **v0.2**: OpenAI Realtime via WebSocket + audio routing to avatar's pushAudio.
-- **v0.3**: Android plugin against `ai.bithuman:sdk:1.13.0` AAR.
-- **v0.4**: macOS native path (mostly reuses iOS Swift code).
-- **v1.0**: Polish, error handling, docs. Linux/Windows/Web are explicit later targets.
+- **v0**  ✅ Dart API + plugin scaffold + catalog browser + tap-to-load.
+- **v0.1** ✅ iOS native render path. `engine 1.13.0 (ABI 4)` confirmed on
+  iPhone 17 Pro Simulator. Real libessence.xcframework binding, per-SDK
+  OTHER_LDFLAGS, static framework so symbols carry to the app's link.
+- **v0.2** ✅ OpenAI Realtime via WebSocket + mic capture (`record`) +
+  speaker playback (`audioplayers` with WAV-wrapped PCM) + 24→16 kHz
+  resample to avatar.pushAudio.
+- **v0.3** ✅ Android plugin against `ai.bithuman:sdk:1.12.4` AAR (Maven
+  Central, public). `engine 1.12.4 (ABI 4)` confirmed on emulator-5554.
+  Bitmap+Canvas render to SurfaceTexture at 25 fps.
+- **v0.4** ✅ macOS native path. `engine 1.13.0 (ABI 4)` confirmed on
+  macOS host. macOS arm64 slice of libessence + Homebrew dylibs.
+- **v1.0** ✅ README + this status doc + final ergonomics polish.
+
+## Future targets (deliberately deferred)
+
+- **Linux**: bundle libbithuman.so the same way the Linux CLI install.sh
+  does (`bin/` + `lib/` layout with $ORIGIN/../lib RPATH).
+- **Windows**: gated behind libessence's WINDOWS_CMAKE_PORTED flag —
+  CMakeLists currently hardcodes Homebrew + PkgConfig paths.
+- **Web**: needs either a WASM build of libessence or a remote
+  `bithuman avatar` HTTP server backend. `kIsWeb` would branch between
+  the native bundle path and the server path.
+
+## How the plugin's "one source, three native bindings" trick works
+
+The Dart `BithumanAvatar.load(path)` → MethodChannel("ai.bithuman.avatar")
+fans out into three deliberate per-platform paths:
+
+| Step | iOS / macOS | Android |
+|------|-------------|---------|
+| Open fixture | `be_fixture_load` via `import CLibessence` | `Fixture(path)` via `ai.bithuman:sdk` |
+| Create runtime | `be_runtime_create` | `Runtime(fixture)` |
+| Allocate texture handle | `FlutterTexture` (CVPixelBuffer producer) | `TextureRegistry.SurfaceTextureEntry` |
+| 25-fps loop | `DispatchSourceTimer` on a serial queue | `ScheduledExecutorService` |
+| Per tick | `be_runtime_tick_compose` → BGR → vImage BGR→BGRA → CVPixelBuffer | `runtime.tickCompose` → BGR → manual BGR→ARGB → `Bitmap.setPixels` → `Surface.lockCanvas` |
+| Notify Flutter | `registry.textureFrameAvailable(id)` | implicit on `surface.unlockCanvasAndPost` |
+
+Dart sees the same `int textureId` either way and renders with the
+plain `Texture(textureId: id)` widget — same line of UI code works on
+every platform.
