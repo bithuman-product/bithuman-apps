@@ -29,7 +29,7 @@ plugins {
 android {
     namespace = "ai.bithuman.bithuman_avatar"
 
-    compileSdk = 36
+    compileSdk = 35
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -50,7 +50,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 24
+        minSdk = 29   // ai.bithuman:sdk requires android-29+
     }
 
     testOptions {
@@ -71,6 +71,11 @@ android {
 }
 
 dependencies {
+    // bitHuman Android SDK — wraps libessence + JNI shim + onnxruntime.so.
+    // arm64-v8a only. Latest published on Maven Central is 1.12.4; bumping
+    // to 1.13.0 needs a fresh SDK release tag push.
+    implementation("ai.bithuman:sdk:1.12.4")
+
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")
 }
