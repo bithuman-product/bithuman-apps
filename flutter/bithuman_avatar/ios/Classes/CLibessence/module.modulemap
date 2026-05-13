@@ -1,0 +1,4 @@
+module CLibessence {
+    header "bithuman/libessence_v0.h"
+    export *
+}
