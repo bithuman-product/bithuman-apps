@@ -28,5 +28,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Mic icon → OpenAI Realtime. macOS hard-crashes (TCC OS_REASON_TCC)
+	     on first mic touch unless this key is present. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>The avatar listens to your voice and replies in real time via OpenAI Realtime.</string>
 </dict>
 </plist>

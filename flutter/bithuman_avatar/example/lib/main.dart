@@ -31,6 +31,19 @@ const _systemPrompt =
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // audioplayers on macOS writes BytesSource WAV payload into
+  // ~/Library/Caches/<bundle-id>/<hash>. Under the macOS sandbox that
+  // container subdirectory doesn't exist by default → first response
+  // playback throws PathNotFoundException. Pre-create it so the very
+  // first OpenAI Realtime reply has somewhere to land.
+  () async {
+    try {
+      final cache = await getTemporaryDirectory();
+      await cache.create(recursive: true);
+    } catch (_) {
+      /* best-effort */
+    }
+  }();
   runApp(const BithumanAvatarApp());
 }
 
