@@ -186,9 +186,9 @@ let helpText = """
                          Completions. ★ marks the recommended default.
 
                          voice / avatar (Realtime API):
-                           ★ gpt-realtime-1.5    improved gen
-                             gpt-realtime-mini   cost-efficient pick
+                           ★ gpt-realtime-mini   cost-efficient (default)
                              gpt-realtime        baseline
+                             gpt-realtime-1.5    improved gen
                              gpt-realtime-2      newest, GPT-5-class
 
                          Realtime pricing nuance: all four bill audio

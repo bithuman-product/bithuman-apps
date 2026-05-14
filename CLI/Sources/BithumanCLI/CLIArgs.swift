@@ -62,11 +62,12 @@ struct CLIArgs {
     var openAI: Bool = false
     var local: Bool = false
 
-    /// Default OpenAI model for voice/avatar (Realtime API).
-    /// `gpt-realtime-1.5` is the cost-effective current-gen pick at
-    /// $4 input / $16 output per 1M tokens — vs `gpt-realtime-2`'s
-    /// $32 / $64 (8× more expensive). Prior-gen `gpt-realtime-mini`
-    /// was retired alongside the rest of OpenAI's pre-GPT-5 lineup.
-    /// Text mode substitutes a Chat model — see Modes/TextMode.swift.
-    var openAIModel: String = "gpt-realtime-1.5"
+    /// Default OpenAI model for voice/avatar (Realtime API). The
+    /// `mini` variant is the cheapest live Realtime model — verified
+    /// 2026-05-14 via `/v1/models` that it ships alongside
+    /// `gpt-realtime-mini-2025-10-06` and `gpt-realtime-mini-2025-12-15`.
+    /// Override with `--openai-model gpt-realtime-1.5` or `-2` for the
+    /// pricier higher-end tiers when needed. Text mode substitutes a
+    /// Chat model — see Modes/TextMode.swift.
+    var openAIModel: String = "gpt-realtime-mini"
 }
