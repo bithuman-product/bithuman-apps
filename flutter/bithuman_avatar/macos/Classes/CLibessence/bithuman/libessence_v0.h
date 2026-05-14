@@ -33,7 +33,14 @@
 extern "C" {
 #endif
 
-#define BE_ABI_VERSION 5   /* v5: added be_audio_decode_file/bytes + be_audio_free
+#define BE_ABI_VERSION 6   /* v6: streaming-first API — be_runtime_push_audio,
+                            * be_runtime_pull_frame, be_runtime_ticks_available,
+                            * be_runtime_reset_stream. O(1) per-tick cost,
+                            * suitable for live PCM sources (WebRTC, mic, etc.).
+                            * The batched be_runtime_tick_compose entry point is
+                            * preserved for backward compatibility (same
+                            * semantics, no behavior change).
+                            * v5 added be_audio_decode_file/bytes + be_audio_free
                             * (canonical PCM-input path; eliminates per-binding
                             * resample drift).
                             * v4 added be_runtime_tick_compose_to_size +
@@ -212,6 +219,70 @@ be_status be_runtime_tick_compose(be_runtime_t*        r,
                                   uint8_t*             frame_bgr_out,
                                   size_t               frame_capacity_bytes,
                                   be_compose_result_t* out_result);
+
+/* ---------------------------------------------------------------- */
+/*  Streaming API (since ABI 6 / libessence v1.16)                  */
+/* ---------------------------------------------------------------- */
+/* Producer/consumer pattern for live audio sources (WebRTC, mic, TTS
+ * over network, etc.):
+ *
+ *   - be_runtime_push_audio(r, pcm, n): O(n) work — extends the
+ *     runtime's internal mel buffer by exactly the new STFT frames
+ *     produced by the n new PCM samples. Cost is INDEPENDENT of how
+ *     much audio has already been pushed in this stream.
+ *
+ *   - be_runtime_pull_frame(r, hint, out, cap, result): O(1) work
+ *     for the audio side — consumes one tick worth of cached mel and
+ *     produces a composed BGR frame. Returns BE_ERR_AUDIO_FORMAT if
+ *     no tick is pull-ready yet (caller should push more audio).
+ *
+ *   - be_runtime_ticks_available(r): how many ticks can be pulled
+ *     right now without pushing more audio. = pull-ready frame count.
+ *
+ *   - be_runtime_reset_stream(r): clears the stream state (mel buf,
+ *     STFT overlap, preemphasis history, cursor). Cheap, no model
+ *     reload. Call between sessions (mic toggle, conversation start).
+ *
+ * Threading: single-threaded per runtime. push_audio and pull_frame
+ * can be on different threads if external synchronization is provided
+ * (e.g. caller's render loop owns pull_frame; sink thread calls
+ * push_audio under a lock).
+ *
+ * Output mel values are bit-exact identical with be_runtime_tick_compose
+ * for the same audio (verified vs sine_sweep_5s + speech_5s goldens).
+ * The wrap-around tick that batched mode emits at start = T-16 is
+ * absent in streaming mode by design (the stream is unbounded).
+ */
+
+/* Push n_new PCM samples (16 kHz mono float32) into the runtime's
+ * stream. Extends the internal mel cache by approximately
+ * n_new/HOP_SIZE new frames. Cost: O(n_new). */
+be_status be_runtime_push_audio(be_runtime_t* r,
+                                const float*  new_pcm,
+                                size_t        n_new_samples);
+
+/* Pull one composed frame at the runtime's internal compose cursor.
+ * frame_idx_hint = -1: auto-cycle through source frames (recommended).
+ * frame_idx_hint >= 0: force a specific source frame.
+ *
+ * Returns BE_ERR_AUDIO_FORMAT if not enough audio has been pushed yet
+ * (check be_runtime_ticks_available before calling).
+ *
+ * On success, advances the runtime's compose cursor by 1 and populates
+ * out_result. */
+be_status be_runtime_pull_frame(be_runtime_t*        r,
+                                int32_t              frame_idx_hint,
+                                uint8_t*             frame_bgr_out,
+                                size_t               frame_capacity_bytes,
+                                be_compose_result_t* out_result);
+
+/* How many ticks are pull-ready right now (i.e., n_cached_mel_ticks -
+ * stream_compose_cursor). 0 means caller should push more audio. */
+size_t be_runtime_ticks_available(const be_runtime_t* r);
+
+/* Reset the streaming state. Cheap. Use between conversations or after
+ * disconnect to drop accumulated mel + STFT history. */
+void be_runtime_reset_stream(be_runtime_t* r);
 
 /* Target output canvas for be_runtime_tick_compose_to_size. The runtime
  * aspect-preserving-resizes the native composed frame into this canvas

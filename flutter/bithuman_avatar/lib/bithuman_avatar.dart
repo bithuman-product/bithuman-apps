@@ -101,6 +101,41 @@ class BithumanAvatar {
     });
   }
 
+  /// Attach the plugin's lipsync queue to OpenAI's bot-output audio
+  /// flowing over a flutter_webrtc remote track. Android-only for
+  /// now — the Kotlin side reflectively locates flutter_webrtc's
+  /// `FlutterWebRTCPlugin.sharedSingleton`, fetches the underlying
+  /// `org.webrtc.AudioTrack` for [trackId], and attaches an
+  /// `AudioTrackSink` that downsamples to 16 kHz mono and pushes
+  /// into the same audio queue [pushAudio] uses.
+  ///
+  /// **The source is the REMOTE WebRTC track only — the mic stream
+  /// is never tapped.** That track on the bithuman_avatar WebRTC
+  /// example is exclusively OpenAI's TTS output, so the avatar's
+  /// mouth tracks what the user hears.
+  ///
+  /// Call AFTER [load] returns AND the WebRTC peer connection's
+  /// `onTrack` callback has fired (so the track is registered with
+  /// FlutterWebRTCPlugin). Pass `trackId = remoteAudioTrack.id`.
+  /// Throws if the app doesn't actually ship flutter_webrtc.
+  Future<void> attachWebrtcRemoteAudio(String trackId) async {
+    if (_disposed) throw const BithumanAvatarException('avatar is disposed');
+    await _channel.invokeMethod('attachWebrtcRemoteAudio', {
+      'textureId': textureId,
+      'trackId': trackId,
+    });
+  }
+
+  /// Reverse of [attachWebrtcRemoteAudio] — also flushes any in-
+  /// flight lipsync chunks so the mouth returns to idle when the
+  /// session ends.
+  Future<void> detachWebrtcRemoteAudio() async {
+    if (_disposed) return;
+    await _channel.invokeMethod('detachWebrtcRemoteAudio', {
+      'textureId': textureId,
+    });
+  }
+
   /// Drop the underlying native runtime. Idempotent.
   Future<void> dispose() async {
     if (_disposed) return;

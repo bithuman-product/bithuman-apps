@@ -1,0 +1,41 @@
+# bithuman_avatar_webrtc_example (Android) — port of the
+# openai_realtime_android_probe with the bithuman avatar plugin
+# wired in render-only mode. The WebRTC peer connection owns mic +
+# speaker + AEC entirely; the avatar plugin's RealtimeAudioIO is
+# NOT used (no audioStart call). Phase 1 ships the avatar at idle
+# motion while audio runs over WebRTC; Phase 2 hooks up the lipsync
+# feed via a native libwebrtc audio sink.
+name: bithuman_avatar_webrtc_example
+description: "Flutter example: bithuman_avatar (render-only) + OpenAI Realtime via flutter_webrtc on Android"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # The plugin in render-only mode: just `BithumanAvatar.load` +
+  # `Texture(textureId:)`. audioStart / playSpeakerPCM / micStream
+  # are NOT called here — libwebrtc owns audio.
+  bithuman_avatar:
+    path: ../
+
+  # The proven Android voice loop from
+  # flutter/openai_realtime_android_probe — same dependency, same
+  # peer-connection setup, same VAD tuning.
+  flutter_webrtc: ^1.4.1
+
+  # For resolving the .imx drop-in path on Android.
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

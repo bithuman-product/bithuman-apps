@@ -200,31 +200,13 @@ final class AvatarTexture: NSObject, FlutterTexture {
     return Unmanaged.passRetained(pb)
   }
 
-  /// Drop everything queued for lipsync AND wipe the live audio
-  /// accumulator. Used by the barge-in path so the avatar stops
-  /// animating the cancelled response and slides back to the
-  /// looping-idle path until the next bot chunk lands.
-  ///
-  /// Note: we MUST zero `audioBuf` (not just reset audioValidCount).
-  /// The looping-idle compose path passes `audioBuf[0..<padded]` to
-  /// tick_compose every tick, with `padded = (ticksEmitted+5)·spt`.
-  /// If those bytes still hold the previous agent's voice (which they
-  /// do until something overwrites them), the mel frontend sees real
-  /// audio and the cluster classifier returns a non-silence cluster
-  /// → the avatar keeps lipsyncing the stale data. Zero the range we
-  /// previously wrote so the runtime reads true silence.
+  /// Drop everything queued for lipsync and tell the compose loop to
+  /// reset the runtime's stream on its next fire. Used by the barge-in
+  /// path so the avatar stops animating the cancelled response and
+  /// slides back to looping-idle until the next bot chunk lands.
   func clearAudioQueue() {
     audioLock.lock()
     audioQueue.removeAll(keepingCapacity: true)
-    let wipeEnd = min(audioValidCount, Self.audioBufferTotal)
-    if wipeEnd > 0 {
-      audioBuf.withUnsafeMutableBufferPointer { buf in
-        guard let base = buf.baseAddress else { return }
-        memset(base, 0, wipeEnd * MemoryLayout<Float>.size)
-      }
-    }
-    audioValidCount = 0
-    ticksEmitted = 0
     pendingUtteranceReset = true
     audioLock.unlock()
   }
@@ -240,9 +222,8 @@ final class AvatarTexture: NSObject, FlutterTexture {
     audioLock.lock()
     // If we've been idle ≥ idleResetSecs, treat this chunk as the start
     // of a fresh utterance: ask the compose loop to reset the runtime
-    // (resets the internal compose_cursor) before consuming this audio.
-    if audioValidCount > 0,
-       lastAudioArrivalTime > 0,
+    // stream before consuming this audio.
+    if lastAudioArrivalTime > 0,
        (now - lastAudioArrivalTime) >= Self.idleResetSecs {
       pendingUtteranceReset = true
     }
@@ -276,24 +257,19 @@ final class AvatarTexture: NSObject, FlutterTexture {
   private let audioLock = NSLock()
   private let pixelBufferLock = NSLock()
 
-  // Streaming compose model (mirrors AsyncAvatar._run_iter in Python):
-  //   - `audioBuf` is a forward-growing accumulator. tick_compose is only
-  //     called when at least one full tick + LOOKBACK_TICKS of audio is
-  //     buffered AHEAD of the cursor. Otherwise we skip the timer fire
-  //     (texture keeps its last frame, avatar appears idle).
-  //   - The runtime's INTERNAL compose_cursor advances by `samplesPerTick`
-  //     on every call. We track `ticksEmitted` to stay aligned with it.
-  //   - On a "new utterance" (≥ 1.0 s of silence followed by fresh audio)
-  //     we destroy + recreate the runtime so the cursor resets to 0.
-  // 60 s @ 16 kHz = 3.84 MB. Once full we recycle from idx 0 (next
-  // utterance reset will happen long before 60 s of continuous audio).
-  private static let audioBufferTotal = 16_000 * 60
+  // Streaming compose model (ABI 6 / libessence v1.16):
+  //   - Each render tick (40 ms) we push pending audio chunks into the
+  //     runtime's internal mel stream via be_runtime_push_audio (O(n_new)).
+  //   - When no audio is pending, we push one tick of silence so the
+  //     cluster_idx==0 idle motion (bases cycling) keeps playing.
+  //   - be_runtime_pull_frame produces a composed BGR frame for each
+  //     tick once enough mel is accumulated. be_runtime_ticks_available
+  //     tells us how many ticks are ready right now.
+  //   - On a new utterance (≥ idleResetSecs of silence) we call
+  //     be_runtime_reset_stream() — cheap, no model unload.
   private static let samplesPerTick = 640           // 25 fps @ 16 kHz
-  private static let lookbackTicks = 3              // mel STFT lookahead
   private static let idleResetSecs: Double = 1.0    // gap → new utterance
-  private var audioBuf = [Float](repeating: 0, count: audioBufferTotal)
-  private var audioValidCount: Int = 0              // samples filled from idx 0
-  private var ticksEmitted: Int = 0                 // matches runtime cursor / spt
+  private static let maxComposesPerTick: Int = 5    // budget cap (8 ms × 5)
   private var audioQueue: [Float] = []              // pending pushAudio samples
   private var lastAudioArrivalTime: CFTimeInterval = 0
   private var pendingUtteranceReset = false
@@ -303,15 +279,10 @@ final class AvatarTexture: NSObject, FlutterTexture {
 
   private var fixtureHandle: OpaquePointer? = nil
   private var runtimeHandle: OpaquePointer? = nil
+  private var ticksEmitted: Int = 0                 // monotonic diagnostic
   private var tickCount = 0
   private var loggedTickError = false
-  // Minimum PCM samples to keep `cached_n_ticks` >= ticksEmitted+1 in
-  //
-  // libessence's audio frontend. The mel STFT needs T >= 16 mel frames
-  // for tick 0, plus ~3.2 mel frames per additional tick (mel_idx_mul).
-  // Empirically (ticksEmitted+5)·640 gives a safe lookhead — works for
-  // the initial tick (3200 samples) and grows from there.
-  private static let minPcmHeadroomTicks = 5
+  private let silenceTick = [Float](repeating: 0, count: 640)
 
   private var bgrBuffer = [UInt8](repeating: 0, count: 1920 * 1080 * 3)
   private var frameW: Int = 0
@@ -365,116 +336,77 @@ final class AvatarTexture: NSObject, FlutterTexture {
     NSLog("[BithumanAvatar] timer started")
   }
 
-  /// Reset the libessence runtime (destroys + recreates against the
-  /// same fixture). Use this between idle/active mode transitions OR
-  /// when the PCM cursor approaches end-of-buffer during long idle
-  /// stretches. Returns the new runtime handle, or nil on failure.
-  @discardableResult
-  private func resetRuntime() -> OpaquePointer? {
-    guard let fx = fixtureHandle, let rt = runtimeHandle else { return nil }
-    be_runtime_destroy(rt)
-    runtimeHandle = nil
-    var ropts = be_runtime_options_t()
-    ropts.abi_version = UInt32(BE_ABI_VERSION)
-    var newRt: OpaquePointer? = nil
-    if withUnsafePointer(to: &ropts, { be_runtime_create(fx, $0, &newRt) }) == BE_OK,
-       let r = newRt {
-      runtimeHandle = r
-      audioValidCount = 0
-      ticksEmitted = 0
-      return r
-    } else {
-      NSLog("[BithumanAvatar] runtime reset FAIL: %s", be_last_error_message())
-      return nil
-    }
+  /// Reset the runtime's streaming state (mel buffer + cursor + STFT
+  /// overlap). Cheap (no model unload). Used between utterances and on
+  /// barge-in.
+  private func resetStream() {
+    guard let rt = runtimeHandle else { return }
+    be_runtime_reset_stream(rt)
+    ticksEmitted = 0
   }
 
   private func composeTick() {
-    guard !isShutdown, var runtime = runtimeHandle else { return }
+    guard !isShutdown, let runtime = runtimeHandle else { return }
     tickCount += 1
-    // Drain pending push_audio bytes into the forward-growing accumulator.
-    // If a new utterance was flagged, reset the runtime FIRST so the
-    // internal compose_cursor starts back at 0 before this audio lands.
+
+    // Audio pacing: pop EXACTLY one tick worth of audio per render tick
+    // (zero-pad to a full tick if upstream is short). The speaker drains
+    // at 1× real-time and we render at 25 fps, so 640 samples per render
+    // keeps video frame production locked to audio playback — independent
+    // of how bursty the upstream enqueuePCM() arrivals are. Surplus stays
+    // in audioQueue for subsequent render ticks.
     audioLock.lock()
     let needsReset = pendingUtteranceReset
     pendingUtteranceReset = false
-    let pending = audioQueue
-    audioQueue.removeAll(keepingCapacity: true)
+    let n = Self.samplesPerTick
+    let take = min(n, audioQueue.count)
+    var pending = Array(audioQueue.prefix(take))
+    if take > 0 { audioQueue.removeFirst(take) }
     audioLock.unlock()
 
-    // Reset the runtime if EITHER:
-    //   1. A new utterance was flagged after an idle gap (>= 1 s of
-    //      no audio), OR
-    //   2. Real audio arrived but we're starting fresh from idle (so
-    //      the PCM cursor must align with audioBuf[0..audio_len])
-    // The reset zeros audioValidCount + ticksEmitted, so the next
-    // append lands at index 0 and the cursor reads it on tick 0.
-    if needsReset || (!pending.isEmpty && audioValidCount == 0) {
-      if let r = resetRuntime() { runtime = r }
-    }
+    if needsReset { resetStream() }
 
-    if !pending.isEmpty {
-      for s in pending {
-        if audioValidCount >= Self.audioBufferTotal {
-          // 60 s buffer full — recycle.
-          if let r = resetRuntime() { runtime = r }
-        }
-        audioBuf[audioValidCount] = s
-        audioValidCount += 1
-      }
+    if pending.count < n {
+      pending.append(contentsOf: repeatElement(0, count: n - pending.count))
     }
-
-    // Always compose at 25 FPS — even during idle. Matches the Python
-    // SDK + Swift wrapper's "looping idle": cluster 0 (silence) picks
-    // bases[frame_idx], frame_idx advances per tick, so the source
-    // video plays through and the user sees blinks/breathing/head sway
-    // continuously.
-    //
-    // Buffer strategy: pcmLen = max(audioValidCount, padded-for-cursor).
-    // - audioValidCount: real audio actually pushed by playSpeakerPCM
-    // - padded-for-cursor: silence padding so the mel frontend always
-    //   has enough lookhead for the current tick. audioBuf is
-    //   zero-initialised past audioValidCount, so the silence "comes
-    //   for free" — we just tell tick_compose to read more bytes.
-    //
-    // When the padded length would exceed the 60 s buffer, reset the
-    // runtime so the cursor goes back to 0 and we continue cycling.
-    // (~60 s of idle motion, then a one-frame reset that may shift the
-    // source-video cycle phase — barely perceptible.)
-    let paddedLen = (ticksEmitted + Self.minPcmHeadroomTicks) * Self.samplesPerTick
-    if paddedLen >= Self.audioBufferTotal {
-      if let r = resetRuntime() { runtime = r }
-    }
-    let pcmLen = max(audioValidCount, (ticksEmitted + Self.minPcmHeadroomTicks) * Self.samplesPerTick)
-
-    var cr = be_compose_result_t()
-    let status: be_status = audioBuf.withUnsafeBufferPointer { pcm in
-      bgrBuffer.withUnsafeMutableBufferPointer { out in
-        be_runtime_tick_compose(runtime, pcm.baseAddress, pcmLen, -1,
-                                out.baseAddress, out.count, &cr)
-      }
+    let status: be_status = pending.withUnsafeBufferPointer { buf in
+      be_runtime_push_audio(runtime, buf.baseAddress, buf.count)
     }
     if status != BE_OK {
-      if !loggedTickError {
-        loggedTickError = true
-        let msg = String(cString: be_last_error_message())
-        NSLog("[BithumanAvatar] tick status=%d msg=%@ pcm=%d ticksEmitted=%d",
-              status.rawValue, msg, pcmLen, ticksEmitted)
-      }
-      // BE_ERR_AUDIO_FORMAT (status=6) means cursor went past the buffer
-      // end despite our padding (shouldn't happen with the size check
-      // above, but guard anyway). Reset and try again next tick.
-      if status == be_status(rawValue: 6) {
-        if let r = resetRuntime() { runtime = r }
-      }
+      let msg = String(cString: be_last_error_message())
+      NSLog("[BithumanAvatar] push_audio status=%d msg=%@", status.rawValue, msg)
+      resetStream()
       return
     }
+
+    // Pull at most one frame per render tick (25 fps wall clock).
+    let available = Int(be_runtime_ticks_available(runtime))
+    let composeCount = min(available, 1)
+    var lastResult = be_compose_result_t()
+    for _ in 0..<composeCount {
+      var cr = be_compose_result_t()
+      let status: be_status = bgrBuffer.withUnsafeMutableBufferPointer { out in
+        be_runtime_pull_frame(runtime, -1, out.baseAddress, out.count, &cr)
+      }
+      if status != BE_OK {
+        if !loggedTickError {
+          loggedTickError = true
+          let msg = String(cString: be_last_error_message())
+          NSLog("[BithumanAvatar] pull_frame status=%d msg=%@ available=%d",
+                status.rawValue, msg, available)
+        }
+        resetStream()
+        return
+      }
+      lastResult = cr
+      ticksEmitted += 1
+    }
+    if composeCount == 0 { return }
     loggedTickError = false
-    guard cr.bytes_written > 0 else { return }
-    ticksEmitted += 1
-    if ticksEmitted == 1 || ticksEmitted == 25 || ticksEmitted == 100 {
-      NSLog("[BithumanAvatar] composed tick=%d cluster=%d frame=%d pcm=%d",
-            ticksEmitted, cr.cluster_idx, cr.frame_idx_used, pcmLen)
+    if ticksEmitted == 1 || ticksEmitted % 100 == 0 {
+      NSLog("[BithumanAvatar] composed t=%d cluster=%d frame=%d composeCount=%d available=%d",
+            ticksEmitted, lastResult.cluster_idx, lastResult.frame_idx_used,
+            composeCount, available)
     }
     publishBGRToTexture()
   }

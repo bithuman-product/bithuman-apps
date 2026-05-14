@@ -16,6 +16,9 @@ buildscript {
 
 allprojects {
     repositories {
+        // mavenLocal first so dev iteration (e.g. SDK 1.16.0 unreleased)
+        // resolves against ~/.m2 before falling through to Central.
+        mavenLocal()
         google()
         mavenCentral()
     }
@@ -71,12 +74,15 @@ android {
 }
 
 dependencies {
-    // bitHuman Android SDK — wraps libessence + JNI shim + onnxruntime.so.
-    // arm64-v8a only. Pinned to 1.15.2 because 1.12.x predates the
-    // frame_wh base-frame resize fix → visible lip-patch offset bug
-    // on Android (same root cause we fixed on macOS, see
-    // project_libessence_v1_macos_milestone in memory).
-    implementation("ai.bithuman:sdk:1.15.2")
+    implementation("ai.bithuman:sdk:1.16.0")
+
+    // libwebrtc Java bindings (the same lib flutter_webrtc depends on).
+    // We need `org.webrtc.AudioTrack` + `AudioTrackSink` at compile
+    // time to attach a remote-audio tap → avatar lipsync. `compileOnly`
+    // keeps it out of the runtime classpath of apps that don't already
+    // pull libwebrtc — the bridge feature simply no-ops in those apps
+    // (we resolve `FlutterWebRTCPlugin.sharedSingleton` reflectively).
+    compileOnly("io.github.webrtc-sdk:android:144.7559.01")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")
