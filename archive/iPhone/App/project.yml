@@ -1,0 +1,119 @@
+name: BithumanPhone
+
+# iPhone (compact) variant of the bitHuman avatar app.
+#
+# Wraps the SPM `BithumanPhone` executable target in an .xcodeproj
+# so we can ship via App Store / TestFlight. The SPM target keeps the
+# Sources canonical (Apps/BithumanPhone/Sources/); this project just
+# pulls them in via the local SPM package and adds the iOS bundle
+# metadata + signing + asset catalog the App Store requires.
+#
+# Form-factor specifics vs. the iPad sibling (Apps/BithumanPad/App/):
+#   - bundle id ai.bithuman.app.ios       (iPad: ai.bithuman.app.ipad)
+#   - TARGETED_DEVICE_FAMILY = 1 (iPhone) (iPad: 2)
+#   - portrait-only orientation lock      (iPad: all 4)
+
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  bundleIdPrefix: ai.bithuman
+  xcodeVersion: "26.0"
+  groupSortPosition: top
+
+# Remote SPM dependency. External developers consuming this reference
+# app pull `bitHumanKit` from the public bithuman-sdk-public repo at
+# the tagged release below. The Mac and iPad siblings consume the same
+# package.
+#
+# Single source of truth: `../../version.yml`. When you bump the
+# version, also update `../../Mac/Package.swift` and
+# `../../iPad/App/project.yml` and `../../version.yml` together —
+# CI's `sdk-version-consistency` workflow fails otherwise.
+packages:
+  bithuman-sdk-public:
+    url: https://github.com/bithuman-product/bithuman-sdk-public.git
+    # 0.8.1 is the latest published binary release (heartbeat metering
+    # + bundled CLI key from kit 0.8.1).
+    from: 0.8.1
+
+targets:
+  BithumanPhone:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      # The Sources are the SPM target's canonical location. We
+      # reference them directly so this Xcode project sees the same
+      # Swift files the `swift build --product bithuman-phone` smoke
+      # build uses — no duplication, no drift.
+      - path: ../Sources
+        type: group
+      - path: Assets.xcassets
+        type: folder
+    dependencies:
+      - package: bithuman-sdk-public
+        product: bitHumanKit
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: bitHuman
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.productivity
+        UILaunchScreen: {}
+        # Portrait-locked at the OS level. The phone form factor's
+        # avatar engine frame pump is sized to a single fixed
+        # orientation (see Apps/BithumanPhone/Sources/BithumanPhoneApp.swift
+        # `PhoneOrientationLock`). NO `~ipad` variant — this app is
+        # iPhone only (TARGETED_DEVICE_FAMILY = 1).
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiredDeviceCapabilities:
+          - arm64
+        # Premium feel cues — same dark-mode-only treatment as the
+        # iPad app.
+        UIUserInterfaceStyle: Dark
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
+        # Required usage strings — match the iPad sibling's wording
+        # so privacy-questionnaire copy stays consistent across both
+        # SKUs. The microphone string is what shows up on the very
+        # first launch permission prompt.
+        NSMicrophoneUsageDescription: >-
+          bitHuman listens to you so you can have a real conversation.
+          All speech processing happens on this device — your voice
+          never leaves it.
+        NSSpeechRecognitionUsageDescription: >-
+          bitHuman uses on-device speech recognition to understand
+          what you say. Nothing is sent to Apple's servers —
+          transcription runs entirely on this device.
+        NSCameraUsageDescription: >-
+          bitHuman uses the camera only if you snap a photo to create
+          a custom avatar. The image is processed on-device; bitHuman
+          never uploads photos anywhere.
+        NSPhotoLibraryUsageDescription: >-
+          bitHuman can use a photo from your library to create a
+          custom avatar. The image is processed on-device; bitHuman
+          never uploads photos anywhere.
+        # We play TTS audio; continuing while briefly backgrounded
+        # keeps the conversation flow smooth when the user switches
+        # to another app mid-sentence.
+        UIBackgroundModes:
+          - audio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.bithuman.app.ios
+        # iPhone only. The iPad sibling target uses "2".
+        TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: G64NFNZX84
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
+        SWIFT_VERSION: "5.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        CODE_SIGN_ENTITLEMENTS: BithumanPhone.entitlements
+        # Keep dSYMs for App Store crash symbolication.
+        DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+        # Wire the asset catalog's `AppIcon` set through to the iPhone
+        # app icon. The set ships a single 1024×1024 universal image
+        # (iOS 17+ accepts a single-size universal icon).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

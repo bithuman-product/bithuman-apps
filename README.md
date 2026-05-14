@@ -1,127 +1,134 @@
 # bithuman-apps
 
-Reference apps showing how to embed [`bitHumanKit`](https://docs.bithuman.ai/swift-sdk/overview) — the on-device voice + lip-synced avatar SDK by [bitHuman](https://www.bithuman.ai) — on **macOS, iPadOS, and iOS**, plus a terminal CLI. Each app is a thin shell over the SDK: windowing + lifecycle + entitlements glue, no engine code. Clone, run one command, get a working avatar.
+Reference apps showing how to embed the [bithuman](https://www.bithuman.ai)
+on-device avatar runtime in your own app. The canonical reference is now a
+**Flutter codebase that ships from one Dart project to macOS, iOS, and
+Android** via the [`bithuman_avatar`](flutter/bithuman_avatar/) plugin.
+A terminal CLI ships separately for headless / scripting use.
 
-The Swift SDK source lives in [`bithuman-product/bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk) (alongside the Python SDK). Mac / iPad / iPhone consume it as a SwiftPM dependency from the public binary distribution:
-
-```swift
-.package(url: "https://github.com/bithuman-product/bithuman-sdk-public.git", from: "0.8.1")
+```
+bithuman-apps/
+├── flutter/bithuman_avatar/      Flutter plugin (macOS · iOS · Android)
+│   ├── lib/                      Dart API
+│   ├── macos/ ios/ android/      Native plugin code per platform
+│   └── example/                  Reference app — build for any platform
+├── CLI/                          Swift CLI (interactive macOS chat)
+├── demos/                        Showcase apps (kiosk, tutor, NPC, …)
+└── archive/                      Native Swift Mac/iPad/iPhone apps (parked)
 ```
 
-The CLI consumes the SDK source directly via SwiftPM `path:` dep against a sibling clone of `bithuman-sdk` — see [`CLI/README.md`](CLI/README.md#workspace-layout-for-development) for the workspace convention. CLI development moves in lockstep with SDK changes, so the source dep keeps the iteration loop tight.
+## Quickstart — Flutter reference app
 
-Stack: ASR (SpeechAnalyzer) → LLM (Gemma 3 / 3n via MLX) → TTS (Qwen3-TTS / Kokoro) → bitHuman avatar engine (Wav2Vec2 → DiT → VAE → ANE). Full architecture, hardware floor, pricing, and integration docs live at **[docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview)**.
+The example app under `flutter/bithuman_avatar/example/` is the canonical
+demo. One Dart codebase covers **macOS + iOS + Android**, with the audio
+transport selected at runtime per platform:
 
-## What's here
+| Platform | Transport for OpenAI Realtime | Why |
+|---|---|---|
+| macOS, iOS | WebSocket through plugin's VP-IO `RealtimeAudioIO` | Apple VP-IO is the cleanest hardware AEC; flutter_webrtc on macOS uses libwebrtc software AEC3 which self-interrupts in voice chat |
+| Android | `flutter_webrtc` (libwebrtc native pipeline) | Validated path; sidesteps Android AAudio routing + Java audio sink limitations |
 
-| Variant | Path     | Form factor                 | Walkthrough             |
-| ------- | -------- | --------------------------- | ----------------------- |
-| Mac     | [`Mac/`](Mac/)       | Sparkle-updateable .app + DMG | [Mac/README.md](Mac/README.md)       |
-| iPad    | [`iPad/`](iPad/)     | Stage-Manager widget + PiP    | [iPad/README.md](iPad/README.md)     |
-| iPhone  | [`iPhone/`](iPhone/) | Portrait, smaller LLM         | [iPhone/README.md](iPhone/README.md) |
-| CLI     | [`CLI/`](CLI/)       | Terminal voice/avatar chat (`brew install bithuman-cli`) | [CLI/README.md](CLI/README.md)       |
-| Demos   | [`demos/`](demos/)   | Showcase apps (kiosk, tutor, NPC, ...) | [demos/README.md](demos/README.md)   |
-
-### Essence vs Expression — one factory, both runtimes
-
-The SDK now ships two on-device avatar runtimes. **Expression** is the original audio→TTS→DiT actor with a circular floating window; **Essence** is a lighter-weight rectangular full-frame runtime whose lip-sync is pre-baked at `.imx` pack time and which surfaces frames as an `AsyncStream<CGImage?>`. Both Mac and iPad reference apps auto-detect which kind of `.imx` was loaded via the unified factory and dispatch internally — same UX regardless of which runtime drives the avatar:
-
-```swift
-let runtime: BithumanRuntime = try Bithuman.createRuntime(modelPath: weightsURL)
-switch runtime {
-case .expression(let bithuman):
-    // existing wiring: VoiceChat → AvatarCoordinator → FramePump →
-    // circular AvatarWindow / AvatarRendererView (clipMode = .circle)
-case .essence(let essenceRuntime):
-    // new wiring: rectangular AvatarWindow(targetSize:clipMode:.fill);
-    // mic → essenceRuntime.pushAudio(_:) ; essenceRuntime.frames()
-    // AsyncStream → renderer.show(_:)
-}
-```
-
-The Essence branch is gated behind a `BITHUMAN_KIT_ESSENCE` Swift compile flag in each app's package — off by default until the next bithuman-sdk-public release ships the runtime. Existing Expression behaviour is unchanged when the flag is off.
-
-iPhone is intentionally not in scope for the Essence demo this phase: the 8 GB iPhone 16 Pro memory budget is too tight to host Essence alongside the Expression-class assets safely. iPhone Essence is Phase 2 work.
-
----
-
-## Mac
-
-![](docs/img/hero.webp)
-
-A SwiftUI App-lifecycle binary that wraps the SDK's `AvatarCoordinator` + `AvatarWindow` graph. Launches into video mode (no terminal), right-click the avatar to swap agent / voice / face / prompt. Ships as a Sparkle-updateable, hardened-runtime, notarised `.app`. Standalone SPM package — `swift run` and you're talking to an avatar in 30 seconds.
+Drop your credentials + an `.imx` avatar in via `--dart-define`:
 
 ```sh
-cd Mac
-swift run -c release BithumanMac
+cd flutter/bithuman_avatar/example
+
+# macOS
+flutter run -d macos \
+  --dart-define=OPENAI_API_KEY=sk-... \
+  --dart-define=BITHUMAN_API_SECRET=bh-... \
+  --dart-define=IMX_PATH=/abs/path/to/avatar.imx
+
+# Android (Z Fold 5 etc.)
+flutter run -d <android-device-id> \
+  --dart-define=OPENAI_API_KEY=sk-... \
+  --dart-define=BITHUMAN_API_SECRET=bh-...
+
+# iOS device (release build required for sideload)
+flutter build ios --release
+xcrun devicectl device install app --device <udid> build/ios/iphoneos/Runner.app
 ```
 
-Walkthrough: [Mac/README.md](Mac/README.md). For deployment-side topics (sandbox entitlements, distribution channels, Sparkle setup), see [docs.bithuman.ai/swift-sdk/macos](https://docs.bithuman.ai/swift-sdk/macos).
+If you skip `IMX_PATH`, the app falls back to `<application-support>/avatar.imx`
+and prints the platform-specific path on first run so you can drop the file
+there. See [`flutter/bithuman_avatar/example/lib/dev_config.dart`](flutter/bithuman_avatar/example/lib/dev_config.dart)
+for all tunables (voice / system prompt / VAD threshold / model id /
+`config.json` persistence).
 
-## iPad
-
-![](docs/img/ipad-widget.webp)
-
-iPadOS app with a 320 pt Stage Manager floating widget, a draggable Picture-in-Picture float, and PhotosPicker face swap. Wrapped by an Xcode project (xcodegen-driven) so it ships through TestFlight / App Store. Targets 16 GB M-series iPad Pro; uses `increased-memory-limit` + `extended-virtual-addressing` entitlements.
+## CLI
 
 ```sh
-cd iPad/App
-xcodegen generate
-open BithumanPad.xcodeproj    # then Cmd-R on a real M-series iPad
+brew install bithuman-product/bithuman/bithuman    # Rust unified CLI (canonical)
+brew install bithuman-product/bithuman/bithuman-cli # Swift interactive CLI (this repo)
 ```
 
-Walkthrough: [iPad/README.md](iPad/README.md). For iOS-side topics (entitlements, hardware gating, TestFlight, PiP), see [docs.bithuman.ai/swift-sdk/ios](https://docs.bithuman.ai/swift-sdk/ios).
+The Swift `bithuman-cli` in [`CLI/`](CLI/) is a macOS-only interactive
+voice/text/avatar terminal. It consumes the SDK source via SwiftPM `path:`
+dep against a sibling clone of [`bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk)
+— see [`CLI/README.md`](CLI/README.md#workspace-layout-for-development) for
+the workspace convention.
 
-## iPhone
+The Rust `bithuman` (Homebrew tap formula `bithuman`) lives in
+[`bithuman-sdk/cpp/bindings/rust`](https://github.com/bithuman-product/bithuman-sdk/tree/main/cpp/bindings/rust)
+and ships with `voice` / `text` / `avatar` / `generate` / `stream` /
+`pack` / `convert` subcommands across macOS + Linux. The Swift
+`bithuman-cli` is being folded into the Rust CLI as a follow-up.
 
-![](docs/img/portrait-picker.webp)
+## Archive
 
-Phone-form-factor variant — portrait-locked, single-orientation frame pump, smaller LLM (Gemma 3 1B QAT 4-bit, ~800 MB) so it fits the iOS memory budget without paging. Same SDK, same avatar engine; the windowing + memory-budget tuning is what differs from iPad.
-
-```sh
-cd iPhone/App
-xcodegen generate
-open BithumanPhone.xcodeproj  # then Cmd-R on iPhone 16 Pro+
-```
-
-Walkthrough: [iPhone/README.md](iPhone/README.md).
-
----
+Native Swift Mac / iPad / iPhone apps that previously lived at the repo root
+are parked in [`archive/`](archive/) while the Flutter codebase becomes the
+single source of truth for cross-platform demos. They still build against
+`bithuman-sdk-public` (legacy bitHumanKit SwiftPM) and ship features the
+Flutter port doesn't yet match (on-device LLM via MLX, Sparkle auto-updater,
+drag-drop face swap). The plan is to fold the most-loved features into
+`flutter/bithuman_avatar/` so all three platforms ship from one Dart
+codebase. See [`archive/README.md`](archive/README.md).
 
 ## Architecture
 
-Every app in this repo -- reference apps and demos alike -- consumes the bitHuman SDK as an **external, pre-built dependency** via the published binary package (SwiftPM for Apple platforms, pip for Python). No SDK source is vendored. This is intentional: it ensures the apps test the real developer experience, surface packaging or API gaps early, and stay decoupled from engine internals.
+Every app in this repo consumes the bithuman runtime as an **external,
+pre-built dependency**:
 
 ```
-┌─────────────┐       SwiftPM / pip        ┌──────────────────────┐
-│  App code   │  ──────────────────────►   │  bitHumanKit / bithuman  │
-│  (this repo)│      published binary      │  (SDK, external)     │
-└─────────────┘                            └──────────────────────┘
+┌──────────────────────────┐  flutter pub /  ┌────────────────────────────┐
+│  Flutter app (example)   │  SwiftPM / brew │  bithuman_avatar plugin    │
+│  Dart UI + transport     │  ──────────────►│  + libessence native lib   │
+│  selection               │                 │  (cpp/ from bithuman-sdk)  │
+└──────────────────────────┘                 └────────────────────────────┘
 ```
 
-### Adding new apps or demos
+Engine source-of-truth: [`bithuman-product/bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk)
+— one C++ engine (libessence, ABI v6) powering all bindings. See its
+[README](https://github.com/bithuman-product/bithuman-sdk#readme) for the
+3-layer hierarchy (Engine → Bindings → End-user surfaces).
 
-- **Reference app** (new platform variant): add a top-level directory (e.g. `visionOS/`), wire the SwiftPM dependency, and add a row to the "What's here" table above.
-- **Demo** (use-case showcase): add a subdirectory under `demos/`. See [demos/README.md](demos/README.md) for the checklist.
+## Adding new apps or demos
 
----
+- **Cross-platform demo**: build it on top of `flutter/bithuman_avatar/`.
+  Same Dart code targets macOS + iOS + Android.
+- **Use-case showcase**: add a subdirectory under `demos/`.
+- **Native-only deep dive**: revive an entry from `archive/`, or add a
+  new top-level directory and document the deviation (only when the
+  Flutter path can't model the use case).
 
 ## Hardware requirements
 
-The SDK gates this at runtime via `HardwareCheck.evaluate()`. Under-spec devices see a polite refusal screen.
+The plugin gates eligibility at runtime. Under-spec devices see a polite
+refusal.
 
 | Platform | Minimum |
 |---|---|
-| macOS | M3+ Apple Silicon, macOS 26 (Tahoe) |
-| iPad | iPad Pro M4+, 16 GB unified memory, iPadOS 26 |
-| iPhone | iPhone 16 Pro+ (A18 Pro), iOS 26 |
+| macOS | M3+ Apple Silicon, macOS 13+ |
+| iOS | iPhone 14 Pro / iPad Pro M2+ |
+| Android | Snapdragon 8 Gen 2 / equivalent flagship, Android 14+ |
 
 ## Documentation
 
-- **SDK overview & quickstart** → [docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview)
+- **Plugin overview & quickstart** → [docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview) and [docs.bithuman.ai/kotlin-sdk](https://docs.bithuman.ai/kotlin-sdk/overview)
+- **Streaming API (ABI v6)** → [docs.bithuman.ai/swift-sdk/streaming](https://docs.bithuman.ai/swift-sdk/streaming) · [docs.bithuman.ai/kotlin-sdk/streaming](https://docs.bithuman.ai/kotlin-sdk/streaming)
 - **Authentication** → [docs.bithuman.ai/getting-started/authentication](https://docs.bithuman.ai/getting-started/authentication)
 - **Pricing & credits** → [docs.bithuman.ai/getting-started/pricing](https://docs.bithuman.ai/getting-started/pricing)
-- **Troubleshooting** → [docs.bithuman.ai/swift-sdk/troubleshooting](https://docs.bithuman.ai/swift-sdk/troubleshooting)
 
 ## License
 

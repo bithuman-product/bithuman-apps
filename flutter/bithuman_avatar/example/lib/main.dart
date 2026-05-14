@@ -26,17 +26,26 @@
 // Apache-2.0; (c) bitHuman.
 
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:bithuman_avatar/bithuman_avatar.dart';
 import 'package:bithuman_avatar/bithuman_realtime.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'dev_config.dart';
+import 'openai_webrtc_session.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // WebRTC.initialize() is only needed on the Android transport path.
+  // On macOS+iOS we use the WebSocket Realtime API through the plugin's
+  // VP-IO RealtimeAudioIO and never touch flutter_webrtc.
+  if (Platform.isAndroid) {
+    await WebRTC.initialize();
+  }
   runApp(const BithumanAvatarApp());
 }
 
@@ -55,7 +64,17 @@ class BithumanAvatarApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: const AvatarScreen(),
+        // Platform-conditional UI:
+        //   - macOS + iOS use the rich desktop/tablet AvatarScreen with
+        //     settings sheet, mic/bot meters, and the WebSocket Realtime
+        //     transport via the plugin's VP-IO RealtimeAudioIO.
+        //   - Android uses the simpler phone-portrait AvatarScreenAndroid
+        //     with flutter_webrtc handling mic/speaker/AEC. The WebRTC path
+        //     is the validated Android transport — see the
+        //     `flutter_webrtc Android voice loop validated` finding.
+        home: Platform.isAndroid
+            ? const AvatarScreenAndroid()
+            : const AvatarScreen(),
       );
 }
 
@@ -1523,6 +1542,342 @@ class _Frosted extends StatelessWidget {
             ),
           ),
           child: child,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  Android variant — uses flutter_webrtc as the OpenAI Realtime
+//  transport (the validated Android path; the WebSocket transport
+//  through the plugin's RealtimeAudioIO doesn't survive Android's
+//  AAudio routing). Phone-portrait layout: status pill, transcript
+//  band, big mic button. No settings sheet — pin keys/voice/prompt
+//  via `--dart-define` or the shared `config.json`.
+// ─────────────────────────────────────────────────────────────────────
+
+class AvatarScreenAndroid extends StatefulWidget {
+  const AvatarScreenAndroid({super.key});
+  @override
+  State<AvatarScreenAndroid> createState() => _AvatarScreenAndroidState();
+}
+
+class _AvatarScreenAndroidState extends State<AvatarScreenAndroid> {
+  BithumanAvatar? _avatar;
+  String? _missingImxPath;
+  String _status = '';
+
+  OpenAIWebRTCSession? _session;
+  StreamSubscription<WebRTCStatus>? _sessionSub;
+  StreamSubscription<String>? _transcriptSub;
+  StreamSubscription<void>? _interruptSub;
+  StreamSubscription<MediaStreamTrack>? _remoteAudioSub;
+  WebRTCStatus _rtStatus = WebRTCStatus.idle;
+  String _liveTranscript = '';
+  String _openaiKey = DevConfig.openaiApiKey;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final cfg = await DevConfig.readConfigFile();
+      if (mounted) {
+        setState(() {
+          _openaiKey = (cfg['openai_api_key'] as String?) ?? _openaiKey;
+        });
+      }
+      await _loadAvatar();
+    });
+  }
+
+  @override
+  void dispose() {
+    _sessionSub?.cancel();
+    _transcriptSub?.cancel();
+    _interruptSub?.cancel();
+    _remoteAudioSub?.cancel();
+    _session?.dispose();
+    _avatar?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAvatar() async {
+    try {
+      final imxPath = await DevConfig.resolveImxPath();
+      if (imxPath == null) {
+        final dropPath = await DevConfig.defaultImxPath();
+        if (mounted) setState(() => _missingImxPath = dropPath);
+        return;
+      }
+      setState(() => _status = 'Loading avatar…');
+      final loaded = await BithumanAvatar.load(imxPath);
+      if (!mounted) return;
+      setState(() {
+        _avatar = loaded;
+        _status = '';
+      });
+      // Intentionally NO _avatar.audioStart() — flutter_webrtc owns mic
+      // and speaker on the Android transport. The plugin compose loop
+      // still ticks at 25 fps with silence input → idle motion until
+      // the WebRTC remote-audio track attaches and feeds the lipsync
+      // queue with the bot's voice (see attachWebrtcRemoteAudio below).
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Failed: $e');
+    }
+  }
+
+  Future<void> _toggleSession() async {
+    final avatar = _avatar;
+    if (avatar == null) return;
+    final existing = _session;
+    if (existing != null) {
+      await avatar.detachWebrtcRemoteAudio();
+      await existing.stop();
+      await _sessionSub?.cancel();
+      _sessionSub = null;
+      await _transcriptSub?.cancel();
+      _transcriptSub = null;
+      await _interruptSub?.cancel();
+      _interruptSub = null;
+      await _remoteAudioSub?.cancel();
+      _remoteAudioSub = null;
+      await existing.dispose();
+      if (mounted) {
+        setState(() {
+          _session = null;
+          _rtStatus = WebRTCStatus.idle;
+          _liveTranscript = '';
+        });
+      }
+      return;
+    }
+    if (_openaiKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+          'Set openai_api_key in config.json or pass '
+          '--dart-define=OPENAI_API_KEY to start talking.',
+        ),
+      ));
+      return;
+    }
+    final s = OpenAIWebRTCSession(
+      apiKey: _openaiKey,
+      model: DevConfig.defaultModel,
+      voice: DevConfig.defaultVoice,
+      systemPrompt: DevConfig.defaultSystemPrompt,
+    );
+    _sessionSub = s.statusStream.listen((rt) {
+      if (mounted) {
+        setState(() {
+          _rtStatus = rt;
+          if (rt == WebRTCStatus.responseDone) _liveTranscript = '';
+        });
+      }
+    });
+    _transcriptSub = s.botTranscriptStream.listen((delta) {
+      if (mounted) setState(() => _liveTranscript += delta);
+    });
+    _remoteAudioSub = s.remoteAudioReadyStream.listen((track) async {
+      try {
+        await avatar.attachWebrtcRemoteAudio(track.id ?? '');
+      } catch (e) {
+        debugPrint('[main] attachWebrtcRemoteAudio failed: $e');
+      }
+    });
+    _interruptSub = s.interruptStream.listen((_) async {
+      try {
+        await avatar.interrupt();
+      } catch (e) {
+        debugPrint('[main] avatar.interrupt failed: $e');
+      }
+    });
+    try {
+      await s.start();
+      if (!mounted) {
+        await s.dispose();
+        return;
+      }
+      setState(() => _session = s);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Connect failed: $e')),
+        );
+      }
+      await s.dispose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final missingPath = _missingImxPath;
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (_avatar != null)
+            FittedBox(
+              fit: BoxFit.cover,
+              clipBehavior: Clip.hardEdge,
+              child: SizedBox(
+                width: 1280,
+                height: 722,
+                child: Texture(textureId: _avatar!.textureId),
+              ),
+            )
+          else if (missingPath != null)
+            _AndroidFirstRunSheet(
+                dropPath: missingPath, onRetry: _loadAvatar)
+          else
+            Center(
+              child: Text(
+                _status.isEmpty ? 'Initialising…' : _status,
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+          Positioned(
+            left: 16,
+            top: 40,
+            child: _AndroidStatusPill(
+                status: _rtStatus, hasSession: _session != null),
+          ),
+          if (_avatar != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 24,
+              child: Column(
+                children: [
+                  if (_liveTranscript.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.55),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        _liveTranscript,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 16, height: 1.35),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  _AndroidMicButton(
+                    isOn: _session != null,
+                    onPressed: _toggleSession,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AndroidStatusPill extends StatelessWidget {
+  const _AndroidStatusPill({required this.status, required this.hasSession});
+
+  final WebRTCStatus status;
+  final bool hasSession;
+
+  @override
+  Widget build(BuildContext c) {
+    final (label, color) = switch (status) {
+      WebRTCStatus.idle =>
+        (hasSession ? 'starting…' : 'idle (tap mic)', Colors.white54),
+      WebRTCStatus.connecting => ('connecting', Colors.amber),
+      WebRTCStatus.open => ('open', Colors.greenAccent),
+      WebRTCStatus.userSpeaking => ('you are talking', Colors.lightBlueAccent),
+      WebRTCStatus.userStopped => ('agent thinking', Colors.greenAccent),
+      WebRTCStatus.responseDone => ('replied', Colors.greenAccent),
+      WebRTCStatus.closed => ('closed', Colors.white38),
+      WebRTCStatus.error => ('error', Colors.redAccent),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Text(
+        'WebRTC · $label',
+        style: TextStyle(
+            color: color, fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _AndroidMicButton extends StatelessWidget {
+  const _AndroidMicButton({required this.isOn, required this.onPressed});
+  final bool isOn;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext c) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          color: isOn ? Colors.redAccent : Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: const [
+            BoxShadow(
+                color: Colors.black54, blurRadius: 18, offset: Offset(0, 4)),
+          ],
+        ),
+        child: Icon(
+          isOn ? Icons.call_end_rounded : Icons.mic_rounded,
+          size: 32,
+          color: isOn ? Colors.white : Colors.black,
+        ),
+      ),
+    );
+  }
+}
+
+class _AndroidFirstRunSheet extends StatelessWidget {
+  const _AndroidFirstRunSheet(
+      {required this.dropPath, required this.onRetry});
+
+  final String dropPath;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext c) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Drop an .imx avatar file here:',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            SelectableText(
+              dropPath,
+              style: const TextStyle(
+                  color: Colors.white70, fontFamily: 'monospace'),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
         ),
       ),
     );

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist for the bitHuman macOS .app bundle.
+
+  Most string values are templates: build-mac-app.sh substitutes the
+  __VERSION__ and __BUILD__ tokens at package time so we don't have to
+  touch this file for every release.
+
+  Sparkle keys (SUFeedURL, SUPublicEDKey) are populated at build time
+  from environment variables — see docs/sparkle-setup.md for how to
+  generate the EdDSA key pair and host the appcast.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>bitHuman</string>
+
+    <key>CFBundleName</key>
+    <string>bitHuman</string>
+
+    <key>CFBundleIdentifier</key>
+    <string>ai.bithuman.app.mac</string>
+
+    <key>CFBundleExecutable</key>
+    <string>BithumanMac</string>
+
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+
+    <key>CFBundleVersion</key>
+    <string>__BUILD__</string>
+
+    <key>CFBundleSignature</key>
+    <string>????</string>
+
+    <key>LSMinimumSystemVersion</key>
+    <string>26.0</string>
+
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+
+    <!--
+      The avatar window is borderless + circular, drawn through a
+      custom NSWindow. SwiftUI's `Settings` scene registers no extra
+      window. We don't need agent (LSUIElement=true) mode — we want a
+      Dock tile for visibility — but we DO suppress the default
+      "untitled window" Cmd-N spawn behaviour by not declaring any
+      document types.
+    -->
+    <key>LSUIElement</key>
+    <false/>
+
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!--
+      Hardened-runtime / TCC permission strings. These appear in the
+      system permission prompts the first time we open the mic /
+      request transcription.
+    -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>bitHuman listens to you so it can chat back.</string>
+
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>bitHuman transcribes your speech locally on your Mac.</string>
+
+    <!--
+      Sparkle auto-update. Both keys MUST be populated for releases:
+        SUFeedURL       Public HTTPS URL of appcast.xml.
+        SUPublicEDKey   Base64 EdDSA public key from Sparkle's
+                        `generate_keys` tool. The matching private
+                        key signs each new appcast entry.
+      See Apps/BithumanMac/docs/sparkle-setup.md.
+    -->
+    <key>SUFeedURL</key>
+    <string>__SU_FEED_URL__</string>
+
+    <key>SUPublicEDKey</key>
+    <string>__SU_PUBLIC_ED_KEY__</string>
+
+    <!--
+      Don't auto-prompt for updates the first second of launch — let
+      the avatar warm up first.
+    -->
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
+</dict>
+</plist>

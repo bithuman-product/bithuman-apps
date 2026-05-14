@@ -33,6 +33,15 @@ dependencies:
   audioplayers: ^6.6.0
   web_socket_channel: ^3.0.3
 
+  # Android transport. flutter_webrtc owns mic/speaker/AEC via libwebrtc
+  # on Android — the WebSocket Realtime path through the native plugin's
+  # RealtimeAudioIO is the macOS+iOS story. Android routes through AAudio
+  # and Java sinks fire all-zero PCM, so WebRTC is the working transport
+  # there. The pod ships on Apple platforms but is never initialised; the
+  # macOS+iOS code paths skip `WebRTC.initialize()` and use the
+  # BithumanRealtimeSession (WebSocket) transport instead.
+  flutter_webrtc: ^1.4.1
+
 dev_dependencies:
   integration_test:
     sdk: flutter
