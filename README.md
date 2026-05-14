@@ -11,17 +11,32 @@ bithuman-apps/
 ├── flutter/bithuman_avatar/      Flutter plugin (macOS · iOS · Android)
 │   ├── lib/                      Dart API
 │   ├── macos/ ios/ android/      Native plugin code per platform
-│   └── example/                  Reference app — build for any platform
-├── CLI/                          Swift CLI (interactive macOS chat)
+│   └── example/                  Essence + cloud reference — build for any platform
+├── expression/                   Native Expression demos (on-device LLM/TTS)
+│   └── mac/                      macOS .app — Sparkle DMG, drag-drop face swap
+├── CLI/                          Swift CLI (interactive macOS chat — both runtimes)
 ├── demos/                        Showcase apps (kiosk, tutor, NPC, …)
-└── archive/                      Native Swift Mac/iPad/iPhone apps (parked)
+└── archive/                      Parked apps awaiting revival or fold-in
 ```
+
+## Three reference flavors
+
+| Demo | Platforms | Runtime | LLM / TTS | Distribution |
+|---|---|---|---|---|
+| [`flutter/bithuman_avatar/example/`](flutter/bithuman_avatar/example/) | macOS · iOS · Android | Essence | Cloud (OpenAI Realtime) | `flutter run` |
+| [`expression/mac/`](expression/mac/) | macOS only | Expression | On-device (MLX) or Cloud | Sparkle DMG / `swift run` |
+| [`bithuman-cli avatar`](CLI/) | macOS terminal | both Expression + Essence | both On-device + Cloud | `brew install bithuman-cli` |
+
+These have intentionally non-overlapping scopes — the Flutter app is the
+"easy cross-platform" path, `expression/` is the "full on-device" path,
+and the CLI is the "scriptable / terminal-launched" path. Pick by use
+case, not by preference.
 
 ## Quickstart — Flutter reference app
 
 The example app under `flutter/bithuman_avatar/example/` is the canonical
-demo. One Dart codebase covers **macOS + iOS + Android**, with the audio
-transport selected at runtime per platform:
+cross-platform demo. One Dart codebase covers **macOS + iOS + Android**,
+with the audio transport selected at runtime per platform:
 
 | Platform | Transport for OpenAI Realtime | Why |
 |---|---|---|
@@ -74,16 +89,23 @@ and ships with `voice` / `text` / `avatar` / `generate` / `stream` /
 `pack` / `convert` subcommands across macOS + Linux. The Swift
 `bithuman-cli` is being folded into the Rust CLI as a follow-up.
 
+## Expression demos (on-device LLM/TTS)
+
+The native Expression apps live under [`expression/`](expression/). The
+macOS variant is live ([`expression/mac/`](expression/mac/)) — full
+SwiftUI .app with Sparkle auto-update, drag-drop face swap, and the
+on-device LLM/TTS stack via MLX (Gemma 3 + Qwen3-TTS / Kokoro). iPad +
+iPhone Expression variants are parked in [`archive/`](archive/) pending
+revisit; revive with `git mv archive/iPad expression/ipad` etc. See
+[`expression/README.md`](expression/README.md) for the runtime
+comparison matrix.
+
 ## Archive
 
-Native Swift Mac / iPad / iPhone apps that previously lived at the repo root
-are parked in [`archive/`](archive/) while the Flutter codebase becomes the
-single source of truth for cross-platform demos. They still build against
-`bithuman-sdk-public` (legacy bitHumanKit SwiftPM) and ship features the
-Flutter port doesn't yet match (on-device LLM via MLX, Sparkle auto-updater,
-drag-drop face swap). The plan is to fold the most-loved features into
-`flutter/bithuman_avatar/` so all three platforms ship from one Dart
-codebase. See [`archive/README.md`](archive/README.md).
+Apps awaiting revival or fold-in live in [`archive/`](archive/). Right
+now: the iPadOS + iOS Expression variants (parked while the Mac version
+becomes the canonical Expression demo and Flutter handles cross-platform
+Essence). See [`archive/README.md`](archive/README.md).
 
 ## Architecture
 

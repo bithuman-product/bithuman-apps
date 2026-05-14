@@ -1,32 +1,43 @@
 # archive/
 
-Native Swift reference apps that we're parking here while the consolidated
-Flutter codebase becomes the single source of truth for cross-platform
-demos. Nothing here is dead code — these apps still build against
-`bithuman-sdk-public` (legacy bitHumanKit SwiftPM package) and ship
-features the Flutter `bithuman_demo` doesn't yet match (on-device LLM
-via MLX, ASR via SpeechAnalyzer, drag-drop face swap, Sparkle
-auto-updater, etc.).
-
-The plan is to fold the most-loved features into `flutter/bithuman_avatar`
-+ `flutter/bithuman_demo` so all three platforms (macOS / iOS / Android)
-ship from one Dart codebase. Until that migration lands, treat this
-folder as an archive — useful as a reference for the native SwiftUI
-patterns + as a fallback build path while the Flutter port catches up.
+Reference apps that aren't on the active build path right now — parked
+here while the umbrella organisation around them firms up. Nothing here
+is dead code; each one still builds against `bithuman-sdk-public`
+(legacy bitHumanKit SwiftPM) and ships features that may not yet exist
+in their canonical replacement.
 
 ## What's here
 
-- `Mac/` — full-featured macOS .app (Sparkle auto-updater, DMG release
-  pipeline, Stage-Manager-friendly window).
-- `iPad/` — Stage-Manager widget + PiP demo.
-- `iPhone/` — portrait-orientation, smaller LLM (Gemma 3 1B QAT 4-bit).
+- [`iPad/`](iPad/) — iPadOS Expression demo. Stage-Manager floating
+  widget, draggable Picture-in-Picture, PhotosPicker face swap. Targets
+  M4+ iPad Pro with `increased-memory-limit` entitlement.
+- [`iPhone/`](iPhone/) — iOS Expression demo. Portrait-locked, smaller
+  LLM (Gemma 3 1B QAT 4-bit) sized to the iOS memory budget.
 
-Each subdirectory still has its own README.
+The macOS Expression demo that previously lived here has been promoted
+to [`../expression/mac/`](../expression/mac/) as the canonical Expression
+reference. The iPad and iPhone variants follow the same scope; revive
+either with:
 
-## How to revive one
+```sh
+git mv archive/iPad   expression/ipad
+git mv archive/iPhone expression/iphone
+```
 
-`git mv archive/<App>/ <App>/` and the build path is unchanged.
-`bithuman-sdk-public`'s SwiftPM coords haven't moved, so a clean
-`xcodebuild` (or `swift build` for the Mac one) picks up where it left
-off — provided the `from: 0.8.x` SDK pin in `Package.swift` /
-`project.yml` is still resolvable.
+after which their `bithuman-sdk-public` SwiftPM pin (currently `0.8.1`,
+governed by [`../version.yml`](../version.yml)) needs a refresh to
+resolve against the latest tag.
+
+## When something else lands here
+
+- A reference app that's *being decommissioned*: move it here, write a
+  one-liner under "What's here" pointing at the rationale + any
+  successor.
+- A reference app *waiting for a successor* (this iPad/iPhone case):
+  same — and link to the umbrella that the successor will live under.
+
+## When something leaves here
+
+It either gets revived (back to its umbrella; e.g. `expression/`) or
+fully retired (deleted, with a CHANGELOG note in the repo root if the
+removal is user-visible).
