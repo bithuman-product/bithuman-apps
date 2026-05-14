@@ -59,7 +59,7 @@ class DevConfig {
   /// the `model` key in `config.json`.
   static const defaultModel = String.fromEnvironment(
     'REALTIME_MODEL',
-    defaultValue: 'gpt-4o-realtime-preview-2024-12-17',
+    defaultValue: 'gpt-realtime',
   );
 
   /// The 10 voices OpenAI Realtime currently exposes — surfaced as

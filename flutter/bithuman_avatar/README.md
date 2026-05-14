@@ -100,7 +100,7 @@ Plus catalog helpers (anonymous, no auth):
 
 | Member | Purpose |
 | --- | --- |
-| `BithumanRealtimeSession({apiKey, avatar, model, systemPrompt, voice})` | Construct. `model` defaults to `gpt-4o-realtime-preview-2024-12-17`. |
+| `BithumanRealtimeSession({apiKey, avatar, model, systemPrompt, voice})` | Construct. `model` defaults to `gpt-realtime` (OpenAI Realtime GA). |
 | `start()` | Open WS, start VP-IO, begin forwarding mic. |
 | `stop()` | Close WS, tear down audio. Single-use; build a new session for the next conversation. |
 | `commitInputAudio()` | End-of-turn marker for non-VAD push-to-talk flows. |

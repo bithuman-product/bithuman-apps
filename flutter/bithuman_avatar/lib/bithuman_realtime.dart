@@ -10,8 +10,12 @@
 //
 // Wire format (per https://platform.openai.com/docs/guides/realtime):
 //   - Transport: wss://api.openai.com/v1/realtime?model=…
-//   - Auth: `Authorization: Bearer <api_key>` + `OpenAI-Beta: realtime=v1`
+//   - Auth: `Authorization: Bearer <api_key>` (GA — no Beta header)
 //   - Audio: PCM16 mono @ 24 kHz, base64-encoded inside JSON events
+//   - session.update uses the GA shape: top-level `type: 'realtime'`,
+//     `output_modalities`, nested `audio.input.*` / `audio.output.*`.
+//     The old beta shape (top-level `modalities`/`voice`/`input_audio_format`)
+//     is now rejected with `beta_api_shape_disabled`.
 //
 // Apache-2.0; (c) bitHuman.
 
@@ -33,7 +37,7 @@ class BithumanRealtimeSession {
   BithumanRealtimeSession({
     required this.apiKey,
     required this.avatar,
-    this.model = 'gpt-4o-realtime-preview-2024-12-17',
+    this.model = 'gpt-realtime',
     this.systemPrompt = '',
     this.voice = 'alloy',
   }) {
@@ -60,6 +64,14 @@ class BithumanRealtimeSession {
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   static const int _maxReconnectAttempts = 8;
+
+  // True once the server has acknowledged the connection with any
+  // inbound event (e.g. `session.created`). Used to gate the
+  // `_reconnectAttempt = 0` reset — earlier code reset on TCP-level
+  // success, which made server-side close-after-handshake (e.g. the
+  // beta API deprecation) loop forever in `connecting` instead of
+  // surfacing the error.
+  bool _serverAcked = false;
 
   // True between `speech_started` (we sent response.cancel) and the
   // next `response.created` (OpenAI confirmed it's composing a fresh
@@ -132,30 +144,45 @@ class BithumanRealtimeSession {
   Future<void> _connectAndConfigure() async {
     // ignore: avoid_print
     print('[realtime] connecting to wss://api.openai.com/v1/realtime?model=$model');
+    _serverAcked = false;
     _ws = IOWebSocketChannel.connect(
       Uri.parse('wss://api.openai.com/v1/realtime?model=$model'),
       headers: {
         'Authorization': 'Bearer $apiKey',
-        'OpenAI-Beta': 'realtime=v1',
       },
     );
     _wsSub = _ws!.stream.listen(_handleMessage,
         onError: _handleError,
         onDone: _handleDone);
-    // Configure the session.
+    // Configure the session — GA shape. Audio I/O is nested under
+    // `audio.input` / `audio.output`; turn_detection lives inside
+    // `audio.input`. PCM16 mono @ 24 kHz both directions.
     _send({
       'type': 'session.update',
       'session': {
-        'modalities': ['audio', 'text'],
+        'type': 'realtime',
         'instructions': systemPrompt,
-        'voice': voice,
-        'input_audio_format': 'pcm16',
-        'output_audio_format': 'pcm16',
-        'turn_detection': {
-          'type': 'server_vad',
-          'threshold': 0.5,
-          'prefix_padding_ms': 300,
-          'silence_duration_ms': 500,
+        'output_modalities': ['audio'],
+        'audio': {
+          'input': {
+            'format': {'type': 'audio/pcm', 'rate': 24000},
+            'turn_detection': {
+              'type': 'server_vad',
+              'threshold': 0.5,
+              'prefix_padding_ms': 300,
+              'silence_duration_ms': 500,
+              'create_response': true,
+              'interrupt_response': true,
+            },
+            // Surface user transcripts so captions of "what you just said"
+            // work. Also doubles as an AEC probe — if transcripts come back
+            // with the bot's words, mic is leaking into input.
+            'transcription': {'model': 'whisper-1'},
+          },
+          'output': {
+            'format': {'type': 'audio/pcm', 'rate': 24000},
+            'voice': voice,
+          },
         },
       },
     });
@@ -204,8 +231,13 @@ class BithumanRealtimeSession {
     if (!_open) return;
     try {
       await _connectAndConfigure();
-      // Success — reset backoff so the NEXT drop starts at 1 s again.
-      _reconnectAttempt = 0;
+      // NOTE: do NOT reset `_reconnectAttempt` here. `_connectAndConfigure`
+      // only awaits the TCP dial — the server can still close the WS
+      // immediately afterwards with an event-level error (e.g. when the
+      // beta API was deprecated, every dial succeeded then got 4000-closed
+      // a beat later). Resetting on TCP-success masked that as an infinite
+      // `connecting` loop. The reset now lives in `_handleMessage` on the
+      // first inbound event, which proves the server actually accepted us.
       _status.add(RealtimeStatus.open);
     } catch (e) {
       // ignore: avoid_print
@@ -324,8 +356,16 @@ class BithumanRealtimeSession {
     if (raw is! String) return;
     final evt = jsonDecode(raw) as Map<String, dynamic>;
     final type = evt['type'] as String?;
+    // Any inbound event proves the server accepted the handshake — it's
+    // now safe to reset the reconnect backoff. Doing this here (not in
+    // `_reconnect`) catches the case where the dial succeeds but the
+    // server kills the WS right after with an event-level error.
+    if (!_serverAcked) {
+      _serverAcked = true;
+      _reconnectAttempt = 0;
+    }
     switch (type) {
-      case 'response.audio.delta':
+      case 'response.output_audio.delta':
         if (_droppingCancelledAudio) {
           // Tail-end of a response we already cancelled — OpenAI had
           // these chunks in flight when speech_started fired. Drop
@@ -365,7 +405,7 @@ class BithumanRealtimeSession {
       case 'response.cancelled':
         _haveActiveResponse = false;
         break;
-      case 'response.audio_transcript.delta':
+      case 'response.output_audio_transcript.delta':
         final delta = evt['delta'] as String?;
         if (delta != null && delta.isNotEmpty) {
           _botTranscript.add(delta);

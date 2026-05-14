@@ -82,7 +82,7 @@ Lowest priority first; later sources override earlier ones:
   "imx_path":            "/abs/path/to/avatar.imx",
   "voice":               "ash",
   "system_prompt":       "You are a friendly assistant. Keep replies short and warm.",
-  "model":               "gpt-4o-realtime-preview-2024-12-17",
+  "model":               "gpt-realtime",
   "vad_threshold":       1500
 }
 ```
