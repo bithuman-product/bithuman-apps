@@ -72,9 +72,11 @@ android {
 
 dependencies {
     // bitHuman Android SDK — wraps libessence + JNI shim + onnxruntime.so.
-    // arm64-v8a only. Latest published on Maven Central is 1.12.4; bumping
-    // to 1.13.0 needs a fresh SDK release tag push.
-    implementation("ai.bithuman:sdk:1.12.4")
+    // arm64-v8a only. Pinned to 1.15.2 because 1.12.x predates the
+    // frame_wh base-frame resize fix → visible lip-patch offset bug
+    // on Android (same root cause we fixed on macOS, see
+    // project_libessence_v1_macos_milestone in memory).
+    implementation("ai.bithuman:sdk:1.15.2")
 
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     testImplementation("org.mockito:mockito-core:5.0.0")

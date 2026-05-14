@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Required to flip the system audio mode to MODE_IN_COMMUNICATION
+         and force speakerphone routing so the OpenAI Realtime reply
+         plays through the LOUDSPEAKER instead of the earpiece (which
+         is the default for USAGE_VOICE_COMMUNICATION). -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
     <application
         android:label="bithuman_avatar_example"
         android:name="${applicationName}"

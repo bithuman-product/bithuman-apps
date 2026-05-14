@@ -1,6 +1,7 @@
 .DS_Store
 .build/
 .swiftpm/
+.claude/
 xcuserdata/
 DerivedData/
 # xcodegen-generated artifacts — regenerate via project.yml
@@ -11,3 +12,6 @@ iPad/App/build/
 iPhone/App/build/
 # Build outputs
 dist/
+# Code-coverage / profiling output written next to the binary by some
+# CLI builds (Xcode test runs, swift test --enable-code-coverage).
+*.profraw

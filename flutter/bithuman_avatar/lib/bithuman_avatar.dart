@@ -9,7 +9,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Directory, File, HttpClient, HttpClientResponse;
-import 'dart:typed_data' show Int16List;
+import 'dart:typed_data' show Int16List, Uint8List;
 
 import 'package:flutter/services.dart';
 
@@ -40,6 +40,64 @@ class BithumanAvatar {
     await _channel.invokeMethod('pushAudio', {
       'textureId': textureId,
       'pcm': pcm.buffer.asUint8List(pcm.offsetInBytes, pcm.lengthInBytes),
+    });
+  }
+
+  /// Start the unified VP-IO audio engine on the platform side. Owns
+  /// mic capture (returned via [micStream]) AND speaker playback (fed
+  /// via [playSpeakerPCM]) in a single AVAudioEngine with Apple's Voice
+  /// Processing I/O enabled. This is what gives you:
+  ///   - Acoustic echo cancellation: bot's voice is subtracted from
+  ///     the mic input → no self-talk feedback loop
+  ///   - Sample-accurate A/V sync: speaker and avatar lipsync drain
+  ///     from the SAME source buffer at the SAME instant
+  /// Must be called before [playSpeakerPCM] or [micStream] yield data.
+  Future<void> audioStart() async {
+    if (_disposed) throw const BithumanAvatarException('avatar is disposed');
+    await _channel.invokeMethod('audioStart', {'textureId': textureId});
+  }
+
+  /// Tear down the VP-IO audio engine. Mic tap stops; pending speaker
+  /// buffers are discarded.
+  Future<void> audioStop() async {
+    if (_disposed) return;
+    await _channel.invokeMethod('audioStop', {'textureId': textureId});
+  }
+
+  /// Cut the agent off mid-sentence. Flushes the VP-IO player's
+  /// scheduled-buffer queue (so the speaker stops within ~10 ms) and
+  /// wipes the avatar's lipsync audio buffer (so the mouth stops
+  /// animating the cancelled response and returns to looping idle).
+  /// Call from the Realtime session's `speech_started` handler so
+  /// barge-in fires the instant the user opens their mouth, not at
+  /// end-of-sentence.
+  Future<void> interrupt() async {
+    if (_disposed) return;
+    await _channel.invokeMethod('interrupt', {'textureId': textureId});
+  }
+
+  /// Play 24 kHz mono PCM16 bot audio AND drive the avatar's lipsync
+  /// from the same chunk. The native side schedules the buffer on the
+  /// VP-IO player node and simultaneously pushes a 16 kHz copy into
+  /// the avatar runtime — they share a clock so A/V cannot drift.
+  Future<void> playSpeakerPCM(Uint8List pcm24kPcm16le) async {
+    if (_disposed) throw const BithumanAvatarException('avatar is disposed');
+    await _channel.invokeMethod('playSpeakerPCM', {
+      'textureId': textureId,
+      'pcm': pcm24kPcm16le,
+    });
+  }
+
+  /// Echo-cancelled mic capture as 24 kHz mono PCM16 chunks. Yields
+  /// only between [audioStart] and [audioStop]. Forward the chunks
+  /// straight to OpenAI Realtime — VP-IO has already removed the
+  /// bot's voice from the signal.
+  Stream<Uint8List> get micStream {
+    final ch = EventChannel('ai.bithuman.avatar.mic/$textureId');
+    return ch.receiveBroadcastStream().map((event) {
+      if (event is Uint8List) return event;
+      if (event is List<int>) return Uint8List.fromList(event);
+      return Uint8List(0);
     });
   }
 

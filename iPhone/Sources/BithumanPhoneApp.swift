@@ -71,6 +71,13 @@ final class BithumanPhoneAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         configureAudioSession()
+        #if DEBUG
+        // Dev builds: keep the screen on the moment the app launches so
+        // tethered USB-C testing isn't interrupted by auto-lock during
+        // weights download or on the unsupported-device view. Release
+        // builds rely on the lifecycle-driven toggle below.
+        application.isIdleTimerDisabled = true
+        #endif
         return true
     }
 
