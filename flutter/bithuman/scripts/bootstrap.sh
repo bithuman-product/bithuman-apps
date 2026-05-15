@@ -132,7 +132,7 @@ fi
 # ------------------------------------------------------------- extract
 
 if [ ! -d "$EXTRACT_DIR" ]; then
-    log "Extracting to $EXTRACT_DIR…"
+    log "Extracting to ${EXTRACT_DIR}…"
     mkdir -p "$EXTRACT_DIR"
     tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR" || die "extraction failed"
 else
