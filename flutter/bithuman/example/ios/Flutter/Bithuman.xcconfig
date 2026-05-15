@@ -1,2 +1,7 @@
-DEVELOPMENT_TEAM = G64NFNZX84
+// DEVELOPMENT_TEAM is read from the DEVELOPMENT_TEAM environment
+// variable at build time. Export it in your shell before running
+// `flutter build ios`, or set it via Xcode → Signing & Capabilities.
+// Find your 10-char Apple team ID at developer.apple.com/account.
+// See the repo root README → "Set your Apple signing team".
+DEVELOPMENT_TEAM = $(DEVELOPMENT_TEAM)
 CODE_SIGN_STYLE = Automatic

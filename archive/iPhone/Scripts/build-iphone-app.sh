@@ -27,6 +27,14 @@ fi
 VERSION="$1"
 UPLOAD="${2:-}"
 
+if [[ -z "${DEVELOPMENT_TEAM:-}" ]]; then
+    echo "error: DEVELOPMENT_TEAM env var is not set." >&2
+    echo "  Find your 10-char Apple team ID at developer.apple.com/account," >&2
+    echo "  then: export DEVELOPMENT_TEAM=ABCDE12345" >&2
+    echo "  (See repo root README → 'Set your Apple signing team'.)" >&2
+    exit 2
+fi
+
 # Locations — script is at Apps/BithumanPhone/Scripts/, App project
 # at Apps/BithumanPhone/App/. Resolve from script dir so it works
 # regardless of cwd.
@@ -39,6 +47,13 @@ EXPORT_DIR="$DIST_DIR/BithumanPhone-$VERSION"
 IPA_PATH="$EXPORT_DIR/BithumanPhone.ipa"
 
 mkdir -p "$DIST_DIR"
+
+# Substitute the team ID placeholder in ExportOptions.plist. The
+# committed plist holds a sentinel so the repo doesn't bake in any
+# organisation's team identifier.
+EXPORT_PLIST="$DIST_DIR/ExportOptions.plist"
+sed -e "s/__DEVELOPMENT_TEAM__/$DEVELOPMENT_TEAM/g" \
+    "$APP_DIR/ExportOptions.plist" > "$EXPORT_PLIST"
 
 echo "==> [1/4] xcodegen — regenerating BithumanPhone.xcodeproj"
 ( cd "$APP_DIR" && xcodegen generate )
@@ -67,7 +82,7 @@ mkdir -p "$EXPORT_DIR"
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE_PATH" \
     -exportPath "$EXPORT_DIR" \
-    -exportOptionsPlist "$APP_DIR/ExportOptions.plist" \
+    -exportOptionsPlist "$EXPORT_PLIST" \
     -allowProvisioningUpdates \
     | xcbeautify || true
 

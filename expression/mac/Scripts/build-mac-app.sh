@@ -7,11 +7,19 @@
 #
 #   Output: dist/bitHuman-<version>.dmg
 #
-# Prerequisites — same as release.sh:
+# Prerequisites:
 #
-#   1. Developer ID Application identity in the login keychain:
-#        "Developer ID Application: bitHuman Inc. (G64NFNZX84)"
-#   2. notarytool credentials stored under profile name `bithuman-notary`.
+#   1. A "Developer ID Application" identity in your login keychain.
+#      Pass the full identity string via $SIGNING_IDENTITY, e.g.
+#        export SIGNING_IDENTITY="Developer ID Application: Your Org (ABCDE12345)"
+#      If not set, the script falls back to a generic "Developer ID
+#      Application" lookup (works only if there's exactly one such cert
+#      in your keychain). See the repo root README → "Set your Apple
+#      signing team" for finding your team ID.
+#   2. notarytool credentials stored under profile name $NOTARY_PROFILE
+#      (default: `bithuman-notary`). Create with:
+#        xcrun notarytool store-credentials bithuman-notary \
+#            --apple-id you@example.com --team-id ABCDE12345 --password <app-specific-pw>
 #   3. (For Sparkle release builds) export SU_FEED_URL and
 #      SU_PUBLIC_ED_KEY before running, e.g.
 #        export SU_FEED_URL="https://updates.bithuman.ai/mac/appcast.xml"
@@ -38,7 +46,7 @@ cd "$REPO_ROOT"
 
 VERSION="${1:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(date +%Y%m%d%H%M)}"
-IDENTITY="${SIGNING_IDENTITY:-Developer ID Application: bitHuman Inc. (G64NFNZX84)}"
+IDENTITY="${SIGNING_IDENTITY:-Developer ID Application}"
 PROFILE="${NOTARY_PROFILE:-bithuman-notary}"
 SCHEME="${SCHEME:-BithumanMac}"
 APP_NAME="bitHuman"

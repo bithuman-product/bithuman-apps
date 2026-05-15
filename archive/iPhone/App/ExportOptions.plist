@@ -8,8 +8,10 @@
     <key>method</key>
     <string>app-store</string>
 
+    <!-- Placeholder. Scripts/build-iphone-app.sh substitutes this with
+         your $DEVELOPMENT_TEAM env var before invoking xcodebuild. -->
     <key>teamID</key>
-    <string>G64NFNZX84</string>
+    <string>__DEVELOPMENT_TEAM__</string>
 
     <!-- Automatic signing — Xcode resolves the App Store distribution
          certificate + provisioning profile for ai.bithuman.app.ios.

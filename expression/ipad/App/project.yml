@@ -119,7 +119,10 @@ targets:
         # iPad only (UIDeviceFamily code 2). Phone form factor lives
         # in the BithumanPhone target — different memory budget.
         TARGETED_DEVICE_FAMILY: "2"
-        DEVELOPMENT_TEAM: G64NFNZX84
+        # Set DEVELOPMENT_TEAM in your shell before running xcodegen.
+        # Find your team ID at developer.apple.com/account (10 chars).
+        # See repo root README "Set your Apple signing team" for details.
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
         CODE_SIGN_STYLE: Automatic
         # Apple Development cert for now (debug + sim). For TestFlight
         # uploads, Xcode's automatic-signing will fetch the

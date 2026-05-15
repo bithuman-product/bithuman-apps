@@ -4,7 +4,7 @@ Render a bithuman avatar in your Flutter app, with optional OpenAI Realtime voic
 
 ---
 
-`bithuman` wraps the native [libessence](https://github.com/bithuman-product/bithuman-sdk) runtime behind a Flutter `Texture` widget. One `.imx` model in, one full-bleed animated avatar out. The native side composites at ~1 ms / tick on Apple Silicon (Mac M3+, iPhone A17+), pre-decodes H.264 base frames once, caches them as JPEGs, and NEON-blends the lip-sync patch on every tick. Memory floor is ~120 MB on Mac, ~60 MB on iPhone.
+`bithuman` wraps the native libessence runtime behind a Flutter `Texture` widget. One `.imx` model in, one full-bleed animated avatar out. The native side composites at ~1 ms / tick on Apple Silicon (Mac M3+, iPhone A17+), pre-decodes H.264 base frames once, caches them as JPEGs, and NEON-blends the lip-sync patch on every tick. Memory floor is ~120 MB on Mac, ~60 MB on iPhone.
 
 A second class, `BithumanRealtimeSession`, is an optional helper that wires the avatar to OpenAI's Realtime API for full-duplex voice chat. The plugin owns a single VP-IO `AVAudioEngine` graph: Apple's Voice Processing I/O subtracts the bot's voice from the mic input (no self-talk feedback), the speaker and the avatar's lip-sync drain from the same chunk in the same instant (no A/V drift), and a client-side VAD on mic peak fires barge-in within ~50 ms when the user starts talking over the agent.
 
@@ -124,8 +124,11 @@ The session auto-reconnects WS drops with 1/2/4/8/16/30 s backoff (cap 30 s, 8 a
 
 ## What's bundled per platform
 
-- **macOS**: links against a sibling-cloned `bithuman-sdk/cpp/build/libessence.a` plus a small set of Homebrew dylibs (`ffmpeg`, `hdf5`, `jpeg-turbo`, `webp`, `onnxruntime`). The example app's xcconfig wires `@rpath` so the dylibs resolve at launch. Run `brew install onnxruntime hdf5 jpeg-turbo webp ffmpeg` before first build.
-- **iOS / Android**: target shape is fully-vendored binaries — a `bes.xcframework` for iOS and an AAR with prebuilt `.so` files for Android, pulling from the `bootstrap-deps-v1` tarballs published on the bithuman-sdk releases page. Not landed yet.
+Run `scripts/bootstrap.sh` once after cloning — it fetches the right native libraries for your host into `flutter/bithuman/{ios,macos}/Vendor/` (the Android side pulls from Maven Central automatically and needs nothing).
+
+- **macOS** also needs a handful of Homebrew dylibs at runtime: `brew install onnxruntime hdf5 jpeg-turbo webp ffmpeg`. The example app's xcconfig wires `@rpath` so they resolve at launch.
+- **iOS / iPad** pull a `libessence` slice for device + simulator plus `onnxruntime.xcframework`. All vendored by `bootstrap.sh`.
+- **Android** pulls `ai.bithuman:sdk` from Maven Central via the AAR — no bootstrap step needed.
 
 ## Hardware floor
 

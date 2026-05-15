@@ -21,3 +21,12 @@ pubspec.lock
 # Bundled sample .imx is too large for GitHub (>100MB).
 # Fetched at runtime from the public tap-repo release.
 example/assets/sample-avatar.imx
+
+# Native deps fetched by scripts/bootstrap.sh — not committed, regenerated
+# per-clone since the contents depend on the host machine (sibling SDK
+# checkout vs downloaded release tarball).
+ios/Vendor/build-ios
+ios/Vendor/build-ios-sim
+ios/Vendor/third_party
+ios/Frameworks/onnxruntime.xcframework
+macos/Vendor/build

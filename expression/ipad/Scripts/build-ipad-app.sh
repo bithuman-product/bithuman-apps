@@ -26,7 +26,9 @@
 # Prerequisites (one-time):
 #   - Xcode 16+ on PATH; xcodegen on PATH (`brew install xcodegen`).
 #   - Bundle ID `ai.bithuman.app.ipad` registered in App Store
-#     Connect under team G64NFNZX84.
+#     Connect under your team. Export $DEVELOPMENT_TEAM in the shell
+#     before running this script — see repo root README "Set your
+#     Apple signing team" for how to find your 10-char team ID.
 #   - Apple Distribution cert + App Store provisioning profile
 #     installed in your login keychain (Xcode → Settings →
 #     Accounts → Manage Certificates can install both, or Apple
@@ -58,6 +60,14 @@ if [[ -z "$VERSION" ]]; then
     exit 2
 fi
 
+if [[ -z "${DEVELOPMENT_TEAM:-}" ]]; then
+    echo "error: DEVELOPMENT_TEAM env var is not set."
+    echo "  Find your 10-char Apple team ID at developer.apple.com/account,"
+    echo "  then: export DEVELOPMENT_TEAM=ABCDE12345"
+    echo "  (See repo root README → 'Set your Apple signing team'.)"
+    exit 2
+fi
+
 # Resolve paths relative to the script (`..` = Apps/BithumanPad/).
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PAD_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -67,6 +77,13 @@ ARCHIVE="$DIST_DIR/BithumanPad-$VERSION.xcarchive"
 EXPORT_DIR="$DIST_DIR/BithumanPad-$VERSION-export"
 
 mkdir -p "$DIST_DIR"
+
+# Substitute the team ID placeholder in ExportOptions.plist with the
+# current $DEVELOPMENT_TEAM. The committed plist holds a sentinel so
+# the repo doesn't bake in any organisation's team identifier.
+EXPORT_PLIST="$DIST_DIR/ExportOptions.plist"
+sed -e "s/__DEVELOPMENT_TEAM__/$DEVELOPMENT_TEAM/g" \
+    "$APP_DIR/ExportOptions.plist" > "$EXPORT_PLIST"
 
 echo "==> [1/4] regenerating Xcode project"
 (cd "$APP_DIR" && xcodegen generate)
@@ -91,7 +108,7 @@ xcodebuild \
 echo "==> [3/4] exporting .ipa"
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE" \
-    -exportOptionsPlist "$APP_DIR/ExportOptions.plist" \
+    -exportOptionsPlist "$EXPORT_PLIST" \
     -exportPath "$EXPORT_DIR" \
     -allowProvisioningUpdates
 

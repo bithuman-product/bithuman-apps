@@ -105,7 +105,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: ai.bithuman.app.ios
         # iPhone only. The iPad sibling target uses "2".
         TARGETED_DEVICE_FAMILY: "1"
-        DEVELOPMENT_TEAM: G64NFNZX84
+        # Set DEVELOPMENT_TEAM in your shell before running xcodegen.
+        # Find your team ID at developer.apple.com/account (10 chars).
+        # See repo root README "Set your Apple signing team" for details.
+        DEVELOPMENT_TEAM: ${DEVELOPMENT_TEAM}
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
         SWIFT_VERSION: "5.0"

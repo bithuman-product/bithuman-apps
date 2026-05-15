@@ -1,162 +1,199 @@
 # bithuman-apps
 
-Reference apps showing how to embed the [bithuman](https://www.bithuman.ai)
-on-device avatar runtime in your own app. The canonical reference is a
-**Flutter codebase that ships from one Dart project to macOS, iOS, and
-Android** via the [`bithuman`](flutter/bithuman/) plugin (publishing to
-pub.dev as `bithuman`). The CLI is the Rust `bithuman` binary, sourced
-in [`bithuman-sdk/cpp/bindings/rust`](https://github.com/bithuman-product/bithuman-sdk/tree/main/cpp/bindings/rust)
-and shipped via Homebrew.
+Reference apps showing how to embed bitHuman avatars in your own product. Build them, run them, copy what you need.
 
+- **`flutter/bithuman/example/`** — cross-platform Flutter app (macOS, iOS, iPad, Android) with cloud LLM/TTS via OpenAI Realtime.
+- **`expression/mac/`** — native macOS app with on-device LLM/TTS via MLX, drag-drop face swap, Sparkle auto-update.
+- **`expression/ipad/`** — native iPadOS app with Stage Manager floating widget, Picture-in-Picture, PhotosPicker face swap.
+- **`demos/`** — focused use-case showcases (kiosk, tutor, NPC, …).
+- **`archive/`** — apps parked while we sort out a leaner runtime story for them.
+
+These apps all consume the bitHuman SDK as a pre-built dependency — the same way an external developer would. Treat them as starting points: fork what you need, replace the agent / voice / portrait, ship.
+
+> **A note about scope.** The Flutter app uses the **Essence** runtime (CPU, pre-built `.imx` avatars). The native Expression apps use the **Expression** runtime (Apple Silicon, AI-animated faces). Pick the runtime that fits your hardware and feature needs — comparison at [docs.bithuman.ai/getting-started/models](https://docs.bithuman.ai/getting-started/models).
+
+---
+
+## Getting your API keys
+
+The apps in this repo talk to two cloud services. Both have free tiers and take a couple of minutes each to set up.
+
+### bitHuman API secret
+
+You need this to render avatars (the lip-sync engine validates each session against your account).
+
+1. Go to **[www.bithuman.ai](https://www.bithuman.ai)** and sign up — free, no credit card.
+2. Once you're signed in, click **Developer → API Keys** in the top nav.
+3. Click **Create new key**, give it a name (e.g. *"local dev"*), copy the value.
+4. Free tier includes **99 credits/month** — about 50 minutes of avatar render time. Plenty for development.
+
+You'll use this as either `BITHUMAN_API_SECRET` (Python, CLI, Flutter) or `BITHUMAN_API_KEY` (native Swift). Same value — the name just differs by SDK.
+
+### OpenAI API key
+
+The Flutter example app uses OpenAI's [Realtime API](https://platform.openai.com/docs/guides/realtime) for the voice loop (speech-to-speech with sub-200 ms latency). The native Expression apps run their own on-device LLM/TTS so they don't need this key.
+
+1. Go to **[platform.openai.com/api-keys](https://platform.openai.com/api-keys)** and sign in (create an account if you haven't).
+2. Click **Create new secret key**, give it a name, copy the value.
+3. New OpenAI accounts get **\$5 of free credit** for the first three months — enough to try the demo for an hour or two. After that, top up at [platform.openai.com/settings/organization/billing](https://platform.openai.com/settings/organization/billing).
+
+> **Keep both keys safe.** Treat them like passwords — anyone with the key can spend your credits. The recommended pattern is a `~/.env` file (mode `chmod 600`) at the root of your home directory; the launcher script (`flutter/bithuman/scripts/run-all.sh`) reads from there automatically.
+
+### Save them once
+
+Most of the examples in this repo read keys from environment variables. The easiest way to make them available to every shell + every build:
+
+```sh
+# ~/.env  (chmod 600 ~/.env)
+OPENAI_API_KEY=sk-proj-...
+BITHUMAN_API_SECRET=...
 ```
-bithuman-apps/
-├── flutter/bithuman/             Flutter plugin (macOS · iOS · Android)
-│   ├── lib/                      Dart API (package:bithuman)
-│   ├── macos/ ios/ android/      Native plugin code per platform
-│   └── example/                  Essence + cloud reference — build for any platform
-├── expression/                   Native Expression demos (on-device LLM/TTS)
-│   ├── mac/                      macOS .app — Sparkle DMG, drag-drop face swap
-│   └── ipad/                     iPadOS .app — Stage Manager widget, PiP
-├── demos/                        Showcase apps (kiosk, tutor, NPC, …)
-└── archive/                      Parked apps awaiting revival or fold-in
+
+Then add this to your shell profile (`~/.zshrc` or `~/.bashrc`) so they're set automatically:
+
+```sh
+[ -f "$HOME/.env" ] && set -a && . "$HOME/.env" && set +a
 ```
 
-The Swift `bithuman-cli` that previously lived under `CLI/` has been
-retired in favor of the Rust `bithuman` binary as the single canonical
-CLI. See `bithuman-sdk` for source.
+---
 
-## Three reference flavors
+## First-time setup
 
-| Demo | Platforms | Runtime | LLM / TTS | Distribution |
-|---|---|---|---|---|
-| [`flutter/bithuman/example/`](flutter/bithuman/example/) | macOS · iOS · Android | Essence | Cloud (OpenAI Realtime) | `flutter run` |
-| [`expression/mac/`](expression/mac/), [`/ipad/`](expression/ipad/) | macOS, iPadOS | Expression | On-device (MLX) or Cloud | Sparkle DMG / `swift run` |
-| Rust `bithuman` | macOS terminal · Linux | both Expression + Essence | both On-device + Cloud | `brew install bithuman` |
+### 1. Clone the repo
 
-These have intentionally non-overlapping scopes — the Flutter app is the
-"easy cross-platform" path, `expression/` is the "full on-device native"
-path, and the CLI is the "scriptable / terminal-launched" path. Pick by
-use case.
+```sh
+git clone https://github.com/bithuman-product/bithuman-apps.git
+cd bithuman-apps
+```
 
-## Quickstart — Flutter reference app
+### 2. Install platform tools
 
-The example app under `flutter/bithuman/example/` is the canonical
-cross-platform demo. One Dart codebase covers **macOS + iOS + Android**,
-with the audio transport selected at runtime per platform:
+| You're building for | Tools you need |
+|---|---|
+| Anything Flutter | [Flutter SDK 3.11+](https://docs.flutter.dev/get-started/install) |
+| iOS / iPadOS / macOS native | Xcode 16+ (from the Mac App Store), [`xcodegen`](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`) |
+| Android | Android Studio (or just `flutter doctor` to validate the toolchain) |
 
-| Platform | Transport for OpenAI Realtime | Why |
-|---|---|---|
-| macOS, iOS | WebSocket through plugin's VP-IO `RealtimeAudioIO` | Apple VP-IO is the cleanest hardware AEC; flutter_webrtc on macOS uses libwebrtc software AEC3 which self-interrupts in voice chat |
-| Android | `flutter_webrtc` (libwebrtc native pipeline) | Validated path; sidesteps Android AAudio routing + Java audio sink limitations |
+### 3. Fetch native dependencies *(Flutter only)*
 
-Drop your credentials + an `.imx` avatar in via `--dart-define`:
+The Flutter plugin links against pre-built native libraries (`libessence`, `onnxruntime`, etc.). Run the bootstrap script once after cloning:
+
+```sh
+cd flutter/bithuman
+./scripts/bootstrap.sh
+```
+
+This downloads the right binaries for your host platform from this repo's GitHub Releases and places them under `flutter/bithuman/ios/Vendor/` and `flutter/bithuman/macos/Vendor/`. It only needs to run once per clone (or after a major SDK bump).
+
+The Android target pulls its native library from Maven Central automatically — no bootstrap step needed there.
+
+### 4. Set your Apple signing team *(iOS / iPadOS / macOS only)*
+
+The example apps don't ship with a developer team baked in — you set yours via an environment variable or directly in Xcode. Find your team ID at [developer.apple.com/account](https://developer.apple.com/account) (top-right under your name; ten characters, e.g. `ABCDE12345`).
+
+```sh
+export DEVELOPMENT_TEAM=ABCDE12345
+```
+
+Or open the project in Xcode and pick your team in **Signing & Capabilities**.
+
+---
+
+## Build a reference app
+
+### Flutter example — fastest cross-platform path
+
+Runs on macOS, iOS, iPad, and Android from one Dart codebase. Full-bleed avatar, OpenAI Realtime voice loop, echo-cancelled mic, real-time barge-in.
 
 ```sh
 cd flutter/bithuman/example
+flutter pub get
 
-# macOS
-flutter run -d macos \
-  --dart-define=OPENAI_API_KEY=sk-... \
-  --dart-define=BITHUMAN_API_SECRET=bh-... \
-  --dart-define=IMX_PATH=/abs/path/to/avatar.imx
-
-# Android (Z Fold 5 etc.)
-flutter run -d <android-device-id> \
-  --dart-define=OPENAI_API_KEY=sk-... \
-  --dart-define=BITHUMAN_API_SECRET=bh-...
-
-# iOS device (release build required for sideload)
-flutter build ios --release
-xcrun devicectl device install app --device <udid> build/ios/iphoneos/Runner.app
+# Run on the default device
+flutter run --dart-define=OPENAI_API_KEY=$OPENAI_API_KEY \
+            --dart-define=BITHUMAN_API_SECRET=$BITHUMAN_API_SECRET
 ```
 
-If you skip `IMX_PATH`, the app falls back to `<application-support>/avatar.imx`
-and prints the platform-specific path on first run so you can drop the file
-there. See [`flutter/bithuman/example/lib/dev_config.dart`](flutter/bithuman/example/lib/dev_config.dart)
-for all tunables (voice / system prompt / VAD threshold / model id /
-`config.json` persistence).
-
-## CLI
+To deploy to all your connected devices at once (Mac + iPhone + iPad + Android in parallel), use the launcher:
 
 ```sh
-brew install bithuman-product/bithuman/bithuman
+./flutter/bithuman/scripts/run-all.sh
 ```
 
-The Rust `bithuman` is the canonical CLI — sources live in
-[`bithuman-sdk/cpp/bindings/rust`](https://github.com/bithuman-product/bithuman-sdk/tree/main/cpp/bindings/rust),
-ships via the `homebrew-bithuman` tap to macOS + Linux. Subcommands cover
-`voice` / `text` / `avatar` / `generate` / `stream` / `pack` / `convert` /
-`models` / `info` / `doctor`, with both OpenAI cloud (`--openai`) and
-fully on-device (`--local`, ASR + LLM + TTS) backends.
+It auto-discovers connected devices, picks up keys from `~/.env`, builds three artefacts in parallel (macOS app / universal iOS app / Android APK), and installs + launches everywhere.
 
-The previous Swift `bithuman-cli` (formerly under `CLI/` in this repo)
-was retired — its features are merging into the Rust CLI as a follow-up
-(rich terminal UI via `ratatui`, server-side OpenAI Realtime in `avatar`
-mode, and an opt-in WebRTC transport).
+Full walk-through: [`flutter/bithuman/example/README.md`](flutter/bithuman/example/README.md).
 
-## Expression demos (on-device LLM/TTS)
+### Native macOS app — on-device Expression
 
-The native Expression apps live under [`expression/`](expression/). The
-macOS variant is live ([`expression/mac/`](expression/mac/)) — full
-SwiftUI .app with Sparkle auto-update, drag-drop face swap, and the
-on-device LLM/TTS stack via MLX (Gemma 3 + Qwen3-TTS / Kokoro). iPad +
-iPhone Expression variants are parked in [`archive/`](archive/) pending
-revisit; revive with `git mv archive/iPad expression/ipad` etc. See
-[`expression/README.md`](expression/README.md) for the runtime
-comparison matrix.
+100% on-device — no cloud round-trip, no API keys needed for the voice loop. Drag-drop face swap, Sparkle auto-update, Apple Silicon M3+.
 
-## Archive
-
-Apps awaiting revival or fold-in live in [`archive/`](archive/). Right
-now: the iPadOS + iOS Expression variants (parked while the Mac version
-becomes the canonical Expression demo and Flutter handles cross-platform
-Essence). See [`archive/README.md`](archive/README.md).
-
-## Architecture
-
-Every app in this repo consumes the bithuman runtime as an **external,
-pre-built dependency**:
-
-```
-┌──────────────────────────┐  flutter pub /  ┌────────────────────────────┐
-│  Flutter app (example)   │  SwiftPM / brew │  bithuman_avatar plugin    │
-│  Dart UI + transport     │  ──────────────►│  + libessence native lib   │
-│  selection               │                 │  (cpp/ from bithuman-sdk)  │
-└──────────────────────────┘                 └────────────────────────────┘
+```sh
+cd expression/mac
+swift run -c release BithumanMac
 ```
 
-Engine source-of-truth: [`bithuman-product/bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk)
-— one C++ engine (libessence, ABI v6) powering all bindings. See its
-[README](https://github.com/bithuman-product/bithuman-sdk#readme) for the
-3-layer hierarchy (Engine → Bindings → End-user surfaces).
+First launch downloads ~1.5 GB of model weights into `~/.cache/huggingface/hub/`. Subsequent launches are offline.
 
-## Adding new apps or demos
+Details: [`expression/mac/README.md`](expression/mac/README.md).
 
-- **Cross-platform demo**: build it on top of `flutter/bithuman_avatar/`.
-  Same Dart code targets macOS + iOS + Android.
-- **Use-case showcase**: add a subdirectory under `demos/`.
-- **Native-only deep dive**: revive an entry from `archive/`, or add a
-  new top-level directory and document the deviation (only when the
-  Flutter path can't model the use case).
+### Native iPadOS app — on-device Expression on iPad
 
-## Hardware requirements
+Stage Manager floating widget, draggable Picture-in-Picture, PhotosPicker face swap. Targets iPad Pro M4+ (16 GB RAM).
 
-The plugin gates eligibility at runtime. Under-spec devices see a polite
-refusal.
+```sh
+cd expression/ipad/App
+xcodegen generate
+open BithumanPad.xcodeproj    # Cmd-R on a real M-series iPad
+```
+
+Details: [`expression/ipad/README.md`](expression/ipad/README.md).
+
+---
+
+## Hardware support
+
+Each app declares its own hardware floor. Devices below it see a polite refusal at launch rather than a crash.
 
 | Platform | Minimum |
 |---|---|
-| macOS | M3+ Apple Silicon, macOS 13+ |
-| iOS | iPhone 14 Pro / iPad Pro M2+ |
+| macOS | Apple Silicon M3+, macOS 13+ |
+| iPad | iPad Pro M4+, 16 GB RAM |
+| iPhone | iPhone 15 Pro / 16 Pro / Air (8 GB+) |
 | Android | Snapdragon 8 Gen 2 / equivalent flagship, Android 14+ |
 
-## Documentation
+For the Flutter example, the cross-platform Essence runtime is more forgiving — it'll run on any Apple Silicon Mac and most modern Android phones (the 25 FPS render is the limiting factor, not memory).
 
-- **Plugin overview & quickstart** → [docs.bithuman.ai/swift-sdk](https://docs.bithuman.ai/swift-sdk/overview) and [docs.bithuman.ai/kotlin-sdk](https://docs.bithuman.ai/kotlin-sdk/overview)
-- **Streaming API (ABI v6)** → [docs.bithuman.ai/swift-sdk/streaming](https://docs.bithuman.ai/swift-sdk/streaming) · [docs.bithuman.ai/kotlin-sdk/streaming](https://docs.bithuman.ai/kotlin-sdk/streaming)
-- **Authentication** → [docs.bithuman.ai/getting-started/authentication](https://docs.bithuman.ai/getting-started/authentication)
-- **Pricing & credits** → [docs.bithuman.ai/getting-started/pricing](https://docs.bithuman.ai/getting-started/pricing)
+---
+
+## Repo layout
+
+```
+bithuman-apps/
+├── flutter/bithuman/          Flutter plugin (macOS · iOS · Android)
+│   ├── lib/                   Dart API
+│   ├── ios/ macos/ android/   Native plugin code per platform
+│   ├── scripts/               bootstrap.sh, run-all.sh, e2e-all.sh
+│   └── example/               Reference app — build for any platform
+├── expression/                Native Expression demos (on-device LLM/TTS)
+│   ├── mac/                   macOS .app
+│   └── ipad/                  iPadOS .app
+├── demos/                     Focused use-case showcases
+├── archive/                   Parked apps awaiting revival
+└── version.yml                Pinned bitHuman SDK version
+```
+
+---
+
+## Where to get help
+
+- **Bugs in this repo's example apps** — file an issue at [bithuman-product/bithuman-apps/issues](https://github.com/bithuman-product/bithuman-apps/issues).
+- **SDK runtime questions** (lip-sync drift, audio glitches, model loading) — email [support@bithuman.ai](mailto:support@bithuman.ai) or post in the [Discord](https://discord.gg/ES953n7bPA). The engineers who can fix runtime bugs watch those channels.
+- **Security reports** — email [security@bithuman.ai](mailto:security@bithuman.ai).
+- **Full product docs** — [docs.bithuman.ai](https://docs.bithuman.ai).
+
+---
 
 ## License
 
-See [LICENSE](LICENSE).
+See [LICENSE](LICENSE). Example code is Apache-2.0; the underlying SDK frameworks have their own terms documented at [bithuman.ai/terms](https://www.bithuman.ai/terms).

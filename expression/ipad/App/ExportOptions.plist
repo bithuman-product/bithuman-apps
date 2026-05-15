@@ -7,8 +7,10 @@
     <string>app-store-connect</string>
     <key>destination</key>
     <string>export</string>
+    <!-- Placeholder. Scripts/build-ipad-app.sh substitutes this with
+         your $DEVELOPMENT_TEAM env var before invoking xcodebuild. -->
     <key>teamID</key>
-    <string>G64NFNZX84</string>
+    <string>__DEVELOPMENT_TEAM__</string>
     <!-- Upload dSYMs so TestFlight crash logs symbolicate. -->
     <key>uploadSymbols</key>
     <true/>

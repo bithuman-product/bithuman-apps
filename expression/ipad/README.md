@@ -47,12 +47,16 @@ expression/ipad/
 
 xcodegen spec. The `packages.bithuman-sdk-public` entry pins the
 public SwiftPM binary distribution at
-`github.com/bithuman-product/bithuman-sdk-public.git`. External devs
-get a clean SPM resolve out of the box — no checkout of the SDK
-source required. Bump the pinned version here when a new SDK release
-is published; CI's `sdk-version-consistency.yml` will refuse PRs
-that skew this against `expression/mac/Package.swift`,
-`archive/iPhone/App/project.yml`, and the root `version.yml`.
+`github.com/bithuman-product/bithuman-sdk-public.git`. You get a clean
+SPM resolve out of the box — no SDK source checkout needed. Bump the
+pinned version here when a new SDK release is published; CI's
+`sdk-version-consistency.yml` keeps `expression/mac/Package.swift`,
+`archive/iPhone/App/project.yml`, and the root `version.yml` in sync
+so the pin can't drift accidentally.
+
+The `DEVELOPMENT_TEAM` field reads from your shell's
+`$DEVELOPMENT_TEAM` env var (xcodegen substitutes it at generate
+time). See the repo root README → "Set your Apple signing team".
 
 ### `Sources/BithumanPadApp.swift`
 
@@ -92,12 +96,16 @@ stub takes over and prints a one-liner.
 
 ### `App/BithumanPad.entitlements`
 
-The two memory entitlements:
+The two memory entitlements that let the avatar engine + on-device
+LLM coexist within iPad's per-process memory budget:
 - `com.apple.developer.kernel.increased-memory-limit`
 - `com.apple.developer.kernel.extended-virtual-addressing`
 
-Both are special-permission. See the dev-repo's README for the
-entitlement-approval-request workflow with Apple.
+Both are special-permission entitlements that require approval from
+Apple. Request them via the form at
+[developer.apple.com/contact/request/entitlement](https://developer.apple.com/contact/request/entitlement/com.apple.developer.kernel.increased-memory-limit).
+Without these, the app launches but the avatar engine may evict its
+own working set under memory pressure and stutter.
 
 ## Where to extend
 
