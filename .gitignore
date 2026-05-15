@@ -6,10 +6,10 @@ xcuserdata/
 DerivedData/
 # xcodegen-generated artifacts — regenerate via project.yml
 *.xcodeproj/
-iPad/App/Generated/
-iPhone/App/Generated/
-iPad/App/build/
-iPhone/App/build/
+expression/ipad/App/Generated/
+archive/iPhone/App/Generated/
+expression/ipad/App/build/
+archive/iPhone/App/build/
 # Build outputs
 dist/
 # Code-coverage / profiling output written next to the binary by some

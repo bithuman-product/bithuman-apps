@@ -58,7 +58,7 @@ them into `Info.plist` at packaging time:
 ```sh
 export SU_FEED_URL="https://updates.bithuman.ai/mac/appcast.xml"
 export SU_PUBLIC_ED_KEY="$(cat ~/.bithuman-sparkle/public.pem)"
-./Apps/BithumanMac/Scripts/build-mac-app.sh 0.1.0
+./expression/mac/Scripts/build-mac-app.sh 0.1.0
 ```
 
 The placeholder tokens (`__SU_FEED_URL__`, `__SU_PUBLIC_ED_KEY__`) in

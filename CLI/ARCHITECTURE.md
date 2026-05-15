@@ -269,8 +269,8 @@ and push the tap.
   kernels) — those live in
   [`bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk).
 - **Halo, the desktop companion app** — that was archived; the
-  Mac reference app at `bithuman-apps/Mac/` is its spiritual
-  successor.
+  Mac reference app at `bithuman-apps/expression/mac/` is its
+  spiritual successor.
 - **Per-language SDK distribution** — Swift xcframework releases
   are cut from `bithuman-sdk-public`; PyPI wheels from
   `bithuman-sdk/python/`.

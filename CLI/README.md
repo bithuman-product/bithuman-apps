@@ -12,7 +12,20 @@ bithuman-cli avatar     # Chat with a lip-syncing animated face
 
 Auto-picks the OpenAI Realtime cloud backend when `OPENAI_API_KEY` is
 set; falls back to the fully on-device Apple-Silicon stack otherwise
-(MLX-based LLM + TTS + ASR + the bitHuman avatar engine).
+(MLX-based LLM + TTS + ASR + the bitHuman avatar engine). Default
+Realtime model is `gpt-realtime-mini` (cost-efficient tier); override
+with `--openai-model gpt-realtime` / `gpt-realtime-1.5` / `gpt-realtime-2`.
+
+`bithuman-cli avatar` peeks the supplied `.imx`'s `model_type` and
+dispatches into one of four runners — supporting **both runtimes**:
+
+| Runtime    | Local stack                | OpenAI Realtime            |
+|------------|----------------------------|----------------------------|
+| Expression | `runExpressionVideoSession`| `runExpressionVideoSessionOpenAIWebRTC` |
+| Essence    | `runEssenceVideoSession`   | `runEssenceVideoSessionOpenAIWebRTC`   |
+
+See [ARCHITECTURE.md § Lifecycle](ARCHITECTURE.md#lifecycle) for the
+dispatch flow.
 
 ## Layout
 

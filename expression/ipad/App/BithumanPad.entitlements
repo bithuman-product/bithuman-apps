@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- App Sandbox — required for App Store distribution on iPadOS. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+
+    <!-- Hardware capabilities our avatar pipeline needs at runtime. -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+
+    <!-- ====================================================================
+         MEMORY ENTITLEMENTS (restored 2026-04-27 after empirical proof
+         they're both needed today).
+
+         `extended-virtual-addressing` — REQUIRED. Without it the 3 GB
+         dmd2_run9.safetensors mmap returns POSIX 12 (Cannot allocate
+         memory) intermittently on a 24 GB iPad Pro M5. Confirmed via
+         Bithuman.create.loadFailed in BithumanPad on 2026-04-27.
+
+         `increased-memory-limit` — REQUIRED. Peak RSS during model load
+         + identity encode hit 4.8 GB on the 24 GB iPad — within 6% of
+         the 5 GB jetsam ceiling without this entitlement, and would
+         OOM on smaller-RAM iPads / iPhones.
+
+         Path to dropping both: pre-quantize a smaller iOS-only .imx
+         (int4 DiT/W2V2 baked in, ~1.27 GB total). That fits in ~770 MB
+         mmap (no virtual-addressing pressure) AND ~1.5 GB peak RSS
+         (well under the default jetsam ceiling). Both entitlements
+         can come off after that ships.
+         ==================================================================== -->
+    <key>com.apple.developer.kernel.extended-virtual-addressing</key>
+    <true/>
+    <key>com.apple.developer.kernel.increased-memory-limit</key>
+    <true/>
+</dict>
+</plist>

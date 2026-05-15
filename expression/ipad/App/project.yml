@@ -1,0 +1,135 @@
+name: BithumanPad
+
+# This Xcode project wraps the SPM `BithumanPad` executable target into
+# a real .app bundle so we can ship to TestFlight / App Store. The
+# Swift sources live one level up under Apps/BithumanPad/Sources/ and
+# are included by reference here — they're shared with the SPM smoke
+# build (`swift build --product bithuman-pad --triple arm64-apple-ios26.0`).
+#
+# Regenerate the .xcodeproj with `xcodegen generate` after any edit.
+
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  bundleIdPrefix: ai.bithuman
+  # Xcode 26+ — needed for the iOS 26 SDK that the deploymentTarget
+  # above demands. Match the iPhone sibling at App/project.yml so
+  # xcodegen produces equivalent project metadata across the two apps.
+  xcodeVersion: "26.0"
+  groupSortPosition: top
+  createIntermediateGroups: true
+
+# Remote SPM dependency. External developers consuming this reference
+# app pull `bitHumanKit` from the public bithuman-sdk-public repo at the
+# tagged release below.
+#
+# Single source of truth: `../../../version.yml`. When you bump the
+# version, also update `../../mac/Package.swift` and
+# `../../../archive/iPhone/App/project.yml` and `../../../version.yml`
+# together — CI's `sdk-version-consistency` workflow fails otherwise.
+packages:
+  bithuman-sdk-public:
+    url: https://github.com/bithuman-product/bithuman-sdk-public.git
+    # 0.8.1 is the latest published binary release; carries the
+    # heartbeat-metering + bundled CLI key work from bithuman-kit 0.8.1.
+    # Essence (rectangular full-frame on-device runtime) lands in
+    # 0.10.0 — until that ships, the Essence branch in
+    # `BithumanPadApp.start` stays gated behind the
+    # `BITHUMAN_KIT_ESSENCE` Swift compile flag. See
+    # `iPadRuntimeDispatch.swift` for the planned `Bithuman.createRuntime`
+    # dispatch.
+    # TODO: bump to 0.10.0 (or whatever picks up `Bithuman.createRuntime`
+    # + `EssenceRuntime`) and add `BITHUMAN_KIT_ESSENCE` to the target's
+    # OTHER_SWIFT_FLAGS (settings.base.OTHER_SWIFT_FLAGS) when the next
+    # bithuman-sdk-public release ships.
+    from: 0.8.1
+
+targets:
+  BithumanPad:
+    type: application
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      # Swift sources stay in the SPM-shared location. xcodegen
+      # references them by path (no copy); both `swift build` and the
+      # Xcode build see the same files.
+      - path: ../Sources
+        type: group
+      - path: Assets.xcassets
+        type: folder
+    dependencies:
+      - package: bithuman-sdk-public
+        product: bitHumanKit
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: bitHuman
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.productivity
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIApplicationSupportsIndirectInputEvents: true
+        # The avatar canvas is dark; lock the system chrome to match.
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIUserInterfaceStyle: Dark
+        UIViewControllerBasedStatusBarAppearance: false
+        # Multi-window / Stage Manager. The app uses the SwiftUI App
+        # lifecycle with a UIApplicationDelegateAdaptor — no manual
+        # scene delegate class needed; UIKit hosts the WindowGroup.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+        # User-facing permission strings. bitHuman is on-device — no
+        # voice / photo / transcript ever leaves the iPad.
+        NSMicrophoneUsageDescription: >-
+          bitHuman listens to you so you can have a real conversation.
+          All speech processing happens on this device — your voice
+          never leaves it.
+        NSSpeechRecognitionUsageDescription: >-
+          bitHuman uses on-device speech recognition to understand what
+          you say. Nothing is sent to Apple's servers — transcription
+          runs entirely on this device.
+        NSCameraUsageDescription: >-
+          bitHuman uses the camera only if you snap a photo to create a
+          custom avatar. The image is processed on-device; bitHuman
+          never uploads photos anywhere.
+        NSPhotoLibraryUsageDescription: >-
+          bitHuman can use a photo from your library to create a custom
+          avatar. The image is processed on-device; bitHuman never
+          uploads photos anywhere.
+        # `audio` — TTS keeps playing while briefly backgrounded so
+        # the conversation doesn't cut out across app switches.
+        # `picture-in-picture` — required for AVPictureInPictureController
+        # with a custom sample-buffer-display-layer content source. The
+        # avatar circle floats over other apps as a draggable PiP
+        # window when the user taps the "Float" menu entry.
+        UIBackgroundModes:
+          - audio
+          - picture-in-picture
+        # Files-app sideloading so devs can drop weights manually.
+        LSSupportsOpeningDocumentsInPlace: true
+        UIFileSharingEnabled: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ai.bithuman.app.ipad
+        # iPad only (UIDeviceFamily code 2). Phone form factor lives
+        # in the BithumanPhone target — different memory budget.
+        TARGETED_DEVICE_FAMILY: "2"
+        DEVELOPMENT_TEAM: G64NFNZX84
+        CODE_SIGN_STYLE: Automatic
+        # Apple Development cert for now (debug + sim). For TestFlight
+        # uploads, Xcode's automatic-signing will fetch the
+        # distribution profile automatically when archiving with
+        # `-allowProvisioningUpdates` (release.sh handles this).
+        CODE_SIGN_IDENTITY: "Apple Development"
+        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_ENTITLEMENTS: BithumanPad.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Keep dSYMs for crash symbolication (TestFlight uploads them
+        # with the IPA when uploadSymbols=true in ExportOptions).
+        DEBUG_INFORMATION_FORMAT: dwarf-with-dsym

@@ -6,7 +6,7 @@ import PackageDescription
 // a notarised .app + Sparkle DMG.
 //
 // External developers: clone the bithuman-apps repo, then run
-// `swift build -c release --product BithumanMac` from this Mac/
+// `swift build -c release --product BithumanMac` from this expression/mac/
 // directory. SPM pulls bitHumanKit from the public binary distribution
 // at https://github.com/bithuman-product/bithuman-sdk-public — a single
 // `bitHumanKit` binaryTarget with every transitive dep statically
@@ -45,10 +45,10 @@ let package = Package(
         // the `.define("BITHUMAN_KIT_ESSENCE")` swift setting below
         // when that release ships.
         //
-        // Single source of truth: `../version.yml`. When you bump the
-        // version below, also update `../iPad/App/project.yml` and
-        // `../iPhone/App/project.yml` and `../version.yml` together
-        // — CI's `sdk-version-consistency` workflow fails otherwise.
+        // Single source of truth: `../../version.yml`. When you bump the
+        // version below, also update `../ipad/App/project.yml` and
+        // `../../archive/iPhone/App/project.yml` and `../../version.yml`
+        // together — CI's `sdk-version-consistency` workflow fails otherwise.
         .package(
             url: "https://github.com/bithuman-product/bithuman-sdk-public.git",
             from: "0.8.1"

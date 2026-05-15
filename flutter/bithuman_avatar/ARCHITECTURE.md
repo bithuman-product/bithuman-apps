@@ -49,7 +49,7 @@ a remote `bithuman avatar` server backend).
 | iOS device | `libessence.xcframework` (ios-arm64 slice) | vendored under `ios/Frameworks/` |
 | iOS simulator | same xcframework (ios-arm64_x86_64-simulator slice) | same |
 | macOS | same xcframework (macos-arm64 slice) | same |
-| Android | `ai.bithuman:sdk:1.13.0` AAR (Maven Central) | Gradle dep |
+| Android | `ai.bithuman:sdk:1.16.0` AAR (Maven Central) | Gradle dep |
 | Linux | `libbithuman.so` (vendored tarball, same pattern as Linux CLI install.sh) | `linux/` CMake |
 | Windows | not yet — CMake port gated in CI | future |
 | Web | not yet — WASM build of libessence OR remote `bithuman avatar` server backend | future |

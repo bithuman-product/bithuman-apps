@@ -13,7 +13,8 @@ bithuman-apps/
 │   ├── macos/ ios/ android/      Native plugin code per platform
 │   └── example/                  Essence + cloud reference — build for any platform
 ├── expression/                   Native Expression demos (on-device LLM/TTS)
-│   └── mac/                      macOS .app — Sparkle DMG, drag-drop face swap
+│   ├── mac/                      macOS .app — Sparkle DMG, drag-drop face swap
+│   └── ipad/                     iPadOS .app — Stage Manager widget, PiP
 ├── CLI/                          Swift CLI (interactive macOS chat — both runtimes)
 ├── demos/                        Showcase apps (kiosk, tutor, NPC, …)
 └── archive/                      Parked apps awaiting revival or fold-in
