@@ -1,0 +1,54 @@
+PODS:
+  - audioplayers_darwin (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - bithuman (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - flutter_webrtc (1.4.0):
+    - Flutter
+    - WebRTC-SDK (= 144.7559.01)
+  - integration_test (0.0.1):
+    - Flutter
+  - record_ios (1.2.0):
+    - Flutter
+  - WebRTC-SDK (144.7559.01)
+
+DEPENDENCIES:
+  - audioplayers_darwin (from `.symlinks/plugins/audioplayers_darwin/darwin`)
+  - bithuman (from `.symlinks/plugins/bithuman/ios`)
+  - Flutter (from `Flutter`)
+  - flutter_webrtc (from `.symlinks/plugins/flutter_webrtc/ios`)
+  - integration_test (from `.symlinks/plugins/integration_test/ios`)
+  - record_ios (from `.symlinks/plugins/record_ios/ios`)
+
+SPEC REPOS:
+  trunk:
+    - WebRTC-SDK
+
+EXTERNAL SOURCES:
+  audioplayers_darwin:
+    :path: ".symlinks/plugins/audioplayers_darwin/darwin"
+  bithuman:
+    :path: ".symlinks/plugins/bithuman/ios"
+  Flutter:
+    :path: Flutter
+  flutter_webrtc:
+    :path: ".symlinks/plugins/flutter_webrtc/ios"
+  integration_test:
+    :path: ".symlinks/plugins/integration_test/ios"
+  record_ios:
+    :path: ".symlinks/plugins/record_ios/ios"
+
+SPEC CHECKSUMS:
+  audioplayers_darwin: 835ced6edd4c9fc8ebb0a7cc9e294a91d99917d5
+  bithuman: ea52006653d2f589c98229d4d6788477126927a0
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_webrtc: ec91d94b484ad49cf191ef93413f64a40ffd3b4c
+  integration_test: 4a889634ef21a45d28d50d622cf412dc6d9f586e
+  record_ios: 412daca2350b228e698fffcd08f1f94ceb1e3844
+  WebRTC-SDK: ab9b5319e458c2bfebdc92b3600740da35d5630d
+
+PODFILE CHECKSUM: ac72d0be38935b9455fd5ba8ac0a36f998ce78a9
+
+COCOAPODS: 1.16.2

@@ -1,41 +1,46 @@
 # bithuman-apps
 
 Reference apps showing how to embed the [bithuman](https://www.bithuman.ai)
-on-device avatar runtime in your own app. The canonical reference is now a
+on-device avatar runtime in your own app. The canonical reference is a
 **Flutter codebase that ships from one Dart project to macOS, iOS, and
-Android** via the [`bithuman_avatar`](flutter/bithuman_avatar/) plugin.
-A terminal CLI ships separately for headless / scripting use.
+Android** via the [`bithuman`](flutter/bithuman/) plugin (publishing to
+pub.dev as `bithuman`). The CLI is the Rust `bithuman` binary, sourced
+in [`bithuman-sdk/cpp/bindings/rust`](https://github.com/bithuman-product/bithuman-sdk/tree/main/cpp/bindings/rust)
+and shipped via Homebrew.
 
 ```
 bithuman-apps/
-├── flutter/bithuman_avatar/      Flutter plugin (macOS · iOS · Android)
-│   ├── lib/                      Dart API
+├── flutter/bithuman/             Flutter plugin (macOS · iOS · Android)
+│   ├── lib/                      Dart API (package:bithuman)
 │   ├── macos/ ios/ android/      Native plugin code per platform
 │   └── example/                  Essence + cloud reference — build for any platform
 ├── expression/                   Native Expression demos (on-device LLM/TTS)
 │   ├── mac/                      macOS .app — Sparkle DMG, drag-drop face swap
 │   └── ipad/                     iPadOS .app — Stage Manager widget, PiP
-├── CLI/                          Swift CLI (interactive macOS chat — both runtimes)
 ├── demos/                        Showcase apps (kiosk, tutor, NPC, …)
 └── archive/                      Parked apps awaiting revival or fold-in
 ```
+
+The Swift `bithuman-cli` that previously lived under `CLI/` has been
+retired in favor of the Rust `bithuman` binary as the single canonical
+CLI. See `bithuman-sdk` for source.
 
 ## Three reference flavors
 
 | Demo | Platforms | Runtime | LLM / TTS | Distribution |
 |---|---|---|---|---|
-| [`flutter/bithuman_avatar/example/`](flutter/bithuman_avatar/example/) | macOS · iOS · Android | Essence | Cloud (OpenAI Realtime) | `flutter run` |
-| [`expression/mac/`](expression/mac/) | macOS only | Expression | On-device (MLX) or Cloud | Sparkle DMG / `swift run` |
-| [`bithuman-cli avatar`](CLI/) | macOS terminal | both Expression + Essence | both On-device + Cloud | `brew install bithuman-cli` |
+| [`flutter/bithuman/example/`](flutter/bithuman/example/) | macOS · iOS · Android | Essence | Cloud (OpenAI Realtime) | `flutter run` |
+| [`expression/mac/`](expression/mac/), [`/ipad/`](expression/ipad/) | macOS, iPadOS | Expression | On-device (MLX) or Cloud | Sparkle DMG / `swift run` |
+| Rust `bithuman` | macOS terminal · Linux | both Expression + Essence | both On-device + Cloud | `brew install bithuman` |
 
 These have intentionally non-overlapping scopes — the Flutter app is the
-"easy cross-platform" path, `expression/` is the "full on-device" path,
-and the CLI is the "scriptable / terminal-launched" path. Pick by use
-case, not by preference.
+"easy cross-platform" path, `expression/` is the "full on-device native"
+path, and the CLI is the "scriptable / terminal-launched" path. Pick by
+use case.
 
 ## Quickstart — Flutter reference app
 
-The example app under `flutter/bithuman_avatar/example/` is the canonical
+The example app under `flutter/bithuman/example/` is the canonical
 cross-platform demo. One Dart codebase covers **macOS + iOS + Android**,
 with the audio transport selected at runtime per platform:
 
@@ -47,7 +52,7 @@ with the audio transport selected at runtime per platform:
 Drop your credentials + an `.imx` avatar in via `--dart-define`:
 
 ```sh
-cd flutter/bithuman_avatar/example
+cd flutter/bithuman/example
 
 # macOS
 flutter run -d macos \
@@ -67,28 +72,27 @@ xcrun devicectl device install app --device <udid> build/ios/iphoneos/Runner.app
 
 If you skip `IMX_PATH`, the app falls back to `<application-support>/avatar.imx`
 and prints the platform-specific path on first run so you can drop the file
-there. See [`flutter/bithuman_avatar/example/lib/dev_config.dart`](flutter/bithuman_avatar/example/lib/dev_config.dart)
+there. See [`flutter/bithuman/example/lib/dev_config.dart`](flutter/bithuman/example/lib/dev_config.dart)
 for all tunables (voice / system prompt / VAD threshold / model id /
 `config.json` persistence).
 
 ## CLI
 
 ```sh
-brew install bithuman-product/bithuman/bithuman    # Rust unified CLI (canonical)
-brew install bithuman-product/bithuman/bithuman-cli # Swift interactive CLI (this repo)
+brew install bithuman-product/bithuman/bithuman
 ```
 
-The Swift `bithuman-cli` in [`CLI/`](CLI/) is a macOS-only interactive
-voice/text/avatar terminal. It consumes the SDK source via SwiftPM `path:`
-dep against a sibling clone of [`bithuman-sdk`](https://github.com/bithuman-product/bithuman-sdk)
-— see [`CLI/README.md`](CLI/README.md#workspace-layout-for-development) for
-the workspace convention.
+The Rust `bithuman` is the canonical CLI — sources live in
+[`bithuman-sdk/cpp/bindings/rust`](https://github.com/bithuman-product/bithuman-sdk/tree/main/cpp/bindings/rust),
+ships via the `homebrew-bithuman` tap to macOS + Linux. Subcommands cover
+`voice` / `text` / `avatar` / `generate` / `stream` / `pack` / `convert` /
+`models` / `info` / `doctor`, with both OpenAI cloud (`--openai`) and
+fully on-device (`--local`, ASR + LLM + TTS) backends.
 
-The Rust `bithuman` (Homebrew tap formula `bithuman`) lives in
-[`bithuman-sdk/cpp/bindings/rust`](https://github.com/bithuman-product/bithuman-sdk/tree/main/cpp/bindings/rust)
-and ships with `voice` / `text` / `avatar` / `generate` / `stream` /
-`pack` / `convert` subcommands across macOS + Linux. The Swift
-`bithuman-cli` is being folded into the Rust CLI as a follow-up.
+The previous Swift `bithuman-cli` (formerly under `CLI/` in this repo)
+was retired — its features are merging into the Rust CLI as a follow-up
+(rich terminal UI via `ratatui`, server-side OpenAI Realtime in `avatar`
+mode, and an opt-in WebRTC transport).
 
 ## Expression demos (on-device LLM/TTS)
 
