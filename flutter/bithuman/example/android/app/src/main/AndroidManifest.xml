@@ -6,6 +6,16 @@
          plays through the LOUDSPEAKER instead of the earpiece (which
          is the default for USAGE_VOICE_COMMUNICATION). -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+    <!-- Required by flutter_webrtc / libwebrtc on Android: it queries
+         ConnectivityService at PeerConnectionFactory init. Without
+         this permission libwebrtc hits a JVM fatal error in jvm.cc:81
+         and aborts (SIGABRT) the moment the user starts a Realtime
+         session. Symptom prior to fix: app loaded + composed idle
+         motion fine, then crashed instantly on mic tap. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!-- Bluetooth headset routing for flutter_webrtc when a BT mic /
+         speaker carries the Realtime conversation. -->
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
     <application
         android:label="bithuman_example"
         android:name="${applicationName}"
