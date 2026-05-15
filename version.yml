@@ -1,22 +1,18 @@
 # Single source of truth for the bitHuman SDK version the native
-# Expression demo apps in `expression/` depend on. Bump this whenever a
-# new bithuman-sdk-public release is published, then update the same
-# version string in:
+# Expression reference apps under `expression/` depend on. Bump this
+# whenever a new bithuman-sdk-public release is published, then update
+# the same version string in:
 #
 #   - expression/mac/Package.swift     (`from: "X.Y.Z"`)
-#   - archive/iPad/App/project.yml     (`from: X.Y.Z`)   ← currently archived
-#   - archive/iPhone/App/project.yml   (`from: X.Y.Z`)   ← currently archived
+#   - expression/ipad/App/project.yml  (`from: X.Y.Z`)
 #
-# The CI workflow `.github/workflows/sdk-version-consistency.yml` reads
-# this file and fails the PR if any active file disagrees with the
-# version below.
+# CI workflow `.github/workflows/sdk-version-consistency.yml` reads
+# this file and fails any PR where one of the consumers disagrees.
 #
-# Scope note: this version pin governs the native Expression apps under
-# `expression/` (and the parked iPad/iPhone variants in `archive/`),
-# which consume bitHumanKit via SwiftPM from `bithuman-sdk-public`. The
-# Flutter `bithuman_avatar` plugin and the Rust/Swift CLIs follow the
-# `bithuman-sdk` (`libessence-vX.Y.Z`) version track instead — see the
-# top-level README for the layered hierarchy.
+# Scope: this pin only governs the native Expression apps under
+# `expression/`. The Flutter `bithuman` plugin pulls its runtime via
+# `scripts/bootstrap.sh` (iOS + macOS) and Maven Central (Android),
+# on a different version track entirely.
 
 bithuman-sdk-public:
   version: "0.8.1"

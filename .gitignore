@@ -4,8 +4,16 @@
 .claude/
 xcuserdata/
 DerivedData/
-# xcodegen-generated artifacts — regenerate via project.yml
+# xcodegen-generated artifacts — regenerate via project.yml (covers
+# expression/ipad/App and archive/iPhone/App). CocoaPods-generated
+# Pods.xcodeproj is covered by the same rule.
 *.xcodeproj/
+# …but the Flutter example Xcode projects are hand-crafted Flutter
+# scaffolding (not xcodegen-generated) and MUST be tracked, otherwise
+# external `flutter build` fails with "Unable to find expected
+# configuration in Xcode project."
+!flutter/bithuman/example/macos/Runner.xcodeproj/
+!flutter/bithuman/example/ios/Runner.xcodeproj/
 expression/ipad/App/Generated/
 archive/iPhone/App/Generated/
 expression/ipad/App/build/

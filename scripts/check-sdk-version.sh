@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Verify all three reference apps pin the same bithuman-sdk-public
-# version, and that they match version.yml at the repo root.
+# Verify the two native Expression reference apps pin the same
+# bithuman-sdk-public version, and that they match version.yml at the
+# repo root.
 #
 # Why: each app declares its SwiftPM dependency in a different file
 # format (Package.swift literal for expression/mac/, xcodegen YAML for
-# expression/ipad/ and archive/iPhone/). There's no auto-propagation.
-# version.yml is the human-edited source of truth; this script is the
-# CI guardrail that fails when someone bumps the version in two files
-# but forgets the third.
+# expression/ipad/). There's no auto-propagation. version.yml is the
+# human-edited source of truth; this script is the CI guardrail that
+# fails when someone bumps the version in one file but forgets the
+# other.
 
 set -euo pipefail
 
@@ -44,7 +45,6 @@ echo
 declare -a checks=(
     "expression/mac/Package.swift|from:[[:space:]]*\"([0-9]+\.[0-9]+\.[0-9]+)\""
     "expression/ipad/App/project.yml|^[[:space:]]+from:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)"
-    "archive/iPhone/App/project.yml|^[[:space:]]+from:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)"
 )
 
 mismatches=0

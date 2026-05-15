@@ -1,12 +1,12 @@
 name: SDK version consistency
 
-# Verify the three native Expression reference apps pin the same
+# Verify the two native Expression reference apps pin the same
 # bithuman-sdk-public version, matching version.yml at the repo root.
 #
-# Catches the "bumped two of three" footgun where a maintainer updates
-# expression/mac/Package.swift and expression/ipad/App/project.yml but
-# forgets archive/iPhone/App/project.yml — which only surfaces when an
-# external developer clones and tries to build the third app.
+# Catches the "bumped one but not the other" footgun where a
+# maintainer updates expression/mac/Package.swift but forgets
+# expression/ipad/App/project.yml — which only surfaces when an
+# external developer clones and tries to build the iPad app.
 #
 # This workflow does not consume any user-controlled GitHub event
 # inputs. The only step is a static call into a checked-in shell
@@ -18,7 +18,6 @@ on:
       - 'version.yml'
       - 'expression/mac/Package.swift'
       - 'expression/ipad/App/project.yml'
-      - 'archive/iPhone/App/project.yml'
       - 'scripts/check-sdk-version.sh'
       - '.github/workflows/sdk-version-consistency.yml'
   push:
@@ -27,7 +26,6 @@ on:
       - 'version.yml'
       - 'expression/mac/Package.swift'
       - 'expression/ipad/App/project.yml'
-      - 'archive/iPhone/App/project.yml'
       - 'scripts/check-sdk-version.sh'
       - '.github/workflows/sdk-version-consistency.yml'
   workflow_dispatch:

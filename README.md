@@ -5,8 +5,6 @@ Reference apps showing how to embed bitHuman avatars in your own product. Build 
 - **`flutter/bithuman/example/`** — cross-platform Flutter app (macOS, iOS, iPad, Android) with cloud LLM/TTS via OpenAI Realtime.
 - **`expression/mac/`** — native macOS app with on-device LLM/TTS via MLX, drag-drop face swap, Sparkle auto-update.
 - **`expression/ipad/`** — native iPadOS app with Stage Manager floating widget, Picture-in-Picture, PhotosPicker face swap.
-- **`demos/`** — focused use-case showcases (kiosk, tutor, NPC, …).
-- **`archive/`** — apps parked while we sort out a leaner runtime story for them.
 
 These apps all consume the bitHuman SDK as a pre-built dependency — the same way an external developer would. Treat them as starting points: fork what you need, replace the agent / voice / portrait, ship.
 
@@ -178,8 +176,7 @@ bithuman-apps/
 ├── expression/                Native Expression demos (on-device LLM/TTS)
 │   ├── mac/                   macOS .app
 │   └── ipad/                  iPadOS .app
-├── demos/                     Focused use-case showcases
-├── archive/                   Parked apps awaiting revival
+├── scripts/                   Top-level helpers (CI version checks)
 └── version.yml                Pinned bitHuman SDK version
 ```
 
