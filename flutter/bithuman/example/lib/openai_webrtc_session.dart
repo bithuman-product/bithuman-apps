@@ -38,7 +38,11 @@ class OpenAIWebRTCSession {
   final String apiKey;
   final String model;
   final String voice;
-  final String systemPrompt;
+  /// Mutable so `applySettings(systemPrompt: …)` can update the active
+  /// session at runtime via a data-channel `session.update` event. The
+  /// stored value tracks what the server currently has, so a subsequent
+  /// reconnect / re-`_sendSessionUpdate` keeps using the latest prompt.
+  String systemPrompt;
 
   RTCPeerConnection? _pc;
   MediaStream? _localStream;
@@ -253,6 +257,38 @@ class OpenAIWebRTCSession {
     final dc = _dc;
     if (dc == null) return;
     dc.send(RTCDataChannelMessage(jsonEncode(evt)));
+  }
+
+  /// Live-update session settings (today: just the system prompt) on
+  /// an open peer connection. Sends a partial `session.update` event
+  /// over the data channel so the server applies the change to the
+  /// next turn — no reconnect required. Returns true if at least one
+  /// field was applied.
+  ///
+  /// No-ops when the data channel isn't open yet (called before
+  /// `start()` returns or after `stop()`); callers should still update
+  /// their own copy of the prompt so a subsequent reconnect picks it
+  /// up.
+  bool applySettings({String? systemPrompt}) {
+    var applied = false;
+    if (systemPrompt != null && systemPrompt != this.systemPrompt) {
+      this.systemPrompt = systemPrompt;
+      applied = true;
+    }
+    final dc = _dc;
+    if (!applied || dc == null) return applied;
+    // Send ONLY the changed fields. The Realtime API merges with the
+    // current session config so we don't need to repeat audio.input.*
+    // / audio.output.* / output_modalities each time — those stay as
+    // _sendSessionUpdate set them.
+    _sendEvent({
+      'type': 'session.update',
+      'session': {
+        'type': 'realtime',
+        'instructions': this.systemPrompt,
+      },
+    });
+    return true;
   }
 
   void _handleDataMessage(RTCDataChannelMessage msg) {

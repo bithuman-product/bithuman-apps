@@ -285,10 +285,12 @@ class WebRTCTransport implements RealtimeTransport {
 
   @override
   bool applySettings({String? systemPrompt, String? voice, String? model}) {
-    // OpenAIWebRTCSession ignores live settings updates today (the
-    // session.update is sent once at connect). Returning false signals
-    // "no-op" so the UI can decide whether to drop & reconnect.
-    return false;
+    // Forward to the underlying WebRTC session — sends a partial
+    // session.update over the data channel so the server applies the
+    // change to the next turn (no reconnect required for the prompt).
+    // voice + model still need a reconnect today; a future patch can
+    // tear down + redial the peer connection on those fields.
+    return _session.applySettings(systemPrompt: systemPrompt);
   }
 
   static TransportStatus _mapStatus(WebRTCStatus s) {
