@@ -11,6 +11,38 @@ sheet hot-applies voice / prompt / model edits.
 
 ## Quickstart
 
+### All four surfaces at once
+
+If you have a Mac, an iPhone, an iPad, and an Android device hooked up and
+just want to deploy the same app to each in parallel:
+
+```
+scripts/run-all.sh
+```
+
+The script discovers everything reachable (this Mac always, then any
+paired iPhone/iPad via `devicectl`, then any non-emulator Android via
+`adb`), prints a status table, builds three artifacts in parallel
+(macOS app / universal iOS bundle / Android APK), and installs +
+launches on every detected target concurrently. Keys are picked up
+from `~/.env` (`OPENAI_API_KEY=…`, `BITHUMAN_API_SECRET=…`). Logs land
+in `/tmp/bithuman-run-all/`.
+
+Useful flags:
+
+| Flag                          | What it does                                    |
+|-------------------------------|-------------------------------------------------|
+| `--surfaces=macos,iphone`     | Subset (default: every reachable target)        |
+| `--imx=/path/to/avatar.imx`   | Pre-positions this .imx into each mobile sandbox |
+| `--skip-build`                | Reuse last build artifacts (fast re-launch)     |
+| `--no-launch`                 | Build + install only (no foreground launch)     |
+
+iPad and iPhone share a single universal iOS bundle — the same
+`flutter build ios --release` artifact installs on both because the
+Xcode project targets `TARGETED_DEVICE_FAMILY = 1,2`. The Flutter UI
+auto-tunes for tablet via `MediaQuery.shortestSide >= 600` in
+`lib/main.dart`.
+
 ### macOS
 
 ```
@@ -150,8 +182,9 @@ with the flag set. Drop a file, tap Retry, talk.
 | Platform | Status |
 |----------|--------|
 | macOS    | Shipping |
-| iOS      | In progress |
-| Android  | In progress |
+| iPhone   | Shipping |
+| iPad     | Shipping (universal iOS bundle) |
+| Android  | Shipping (lipsync A/V refinement in progress) |
 | Web / Linux / Windows | Not yet |
 
 ## Architecture
